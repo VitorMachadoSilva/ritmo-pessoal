@@ -22,6 +22,7 @@ import {
   addDays,
   categories,
   completed,
+  activeHabits,
   dateLabel,
   dayFor,
   isDone,
@@ -196,7 +197,7 @@ export function DatePicker({
 export function ProgressOrbit({ day }: { day: Day }) {
   const p = score(day),
     done = completed(day),
-    total = day.habits.length;
+    total = activeHabits(day).length;
   return (
     <div
       className="orbit"
@@ -423,8 +424,8 @@ export function Heatmap({
                     tabIndex={key === focusDay ? 0 : -1}
                     disabled={!enabled}
                     className={`heat-cell heat-${level} ${future ? "future" : ""} ${key === today ? "is-today" : ""}`}
-                    aria-label={`${dateLabel(key)}: ${p}% concluído`}
-                    title={`${dateLabel(key)} · ${p}% · ${completed(d)} hábitos`}
+                    aria-label={`${dateLabel(key)}: ${p}% concluído${d.mode === "essential" ? ", dia essencial" : ""}`}
+                    title={`${dateLabel(key)} · ${p}% · ${completed(d)} hábitos${d.mode === "essential" ? " · dia essencial" : ""}`}
                     onMouseEnter={() => setHover(key)}
                     onMouseLeave={() => setHover(null)}
                     onFocus={() => {
@@ -462,6 +463,9 @@ export function Heatmap({
             <>
               <strong>{dateLabel(hover)}</strong> ·{" "}
               {score(dayFor(state, hover))}% concluído
+              {dayFor(state, hover).mode === "essential"
+                ? " · dia essencial"
+                : ""}
             </>
           ) : (
             <>

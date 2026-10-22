@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Trash2, Save, ArchiveRestore, Check, Minus } from "lucide-react";
-import { categories, weekdays } from "./lib";
+import { categories, weekdays, isEssential } from "./lib";
 import type {
   Category,
   Habit,
@@ -46,6 +46,7 @@ export function HabitForm({
             : Number(data.get("target") || habit?.target || 1),
         unit: kind === "check" ? "" : data.get("unit") || habit?.unit || "",
         archived: habit?.archived ?? false,
+        essential: data.get("essential") === "on",
       },
       habit ? "PUT" : "POST",
     );
@@ -156,6 +157,19 @@ export function HabitForm({
           defaultValue={habit?.description}
           placeholder="Deixe uma dica para facilitar seu próximo passo."
         />
+      </label>
+      <label className="essential-check">
+        <input
+          type="checkbox"
+          name="essential"
+          defaultChecked={habit ? isEssential(habit) : false}
+        />
+        <span>
+          Incluir no dia essencial
+          <small>
+            Uma lista menor para dias corridos. A meta deste hábito não muda.
+          </small>
+        </span>
       </label>
       {error && (
         <p className="form-error" role="alert">

@@ -51,7 +51,8 @@ import {
   addDays,
   bestStreak,
   categories,
-  completed,
+  allCompleted,
+  isEssential,
   dateLabel,
   dayFor,
   downloadBackup,
@@ -178,7 +179,12 @@ export function RoutinePage(p: PageProps) {
                 <CategoryIcon category={h.category} />
               </span>
               <div className="routine-habit-text">
-                <strong>{h.title}</strong>
+                <strong>
+                  {h.title}{" "}
+                  {isEssential(h) && (
+                    <span className="essential-badge">Essencial</span>
+                  )}
+                </strong>
                 <p>{h.description}</p>
                 <div className="routine-schedule">
                   <Clock3 size={12} />
@@ -286,7 +292,7 @@ export function ProgressPage(p: PageProps) {
       weight: d.weight,
     }));
   const totalHabits = Object.values(s.days).reduce(
-    (n, d) => n + completed(d),
+    (n, d) => n + allCompleted(d),
     0,
   );
   const best = bestStreak(s);

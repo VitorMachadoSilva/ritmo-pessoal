@@ -14,11 +14,14 @@ import {
   Target,
   Trophy,
   Zap,
+  BookOpen as BookIcon,
 } from "lucide-react";
 import type { Day, Habit, Mutation, PageId, State } from "./types";
 import {
   addDays,
   completed,
+  activeHabits,
+  isEssential,
   dateLabel,
   dayFor,
   isDone,
@@ -270,7 +273,8 @@ export default function Dashboard({
     (d) => d <= today && score(dayFor(state, d)) >= dayFor(state, d).threshold,
   ).length;
   const level = Math.floor(totalXp / 500) + 1;
-  const remaining = day.habits.filter((h) => !isDone(h, day));
+  const scheduled = activeHabits(day);
+  const remaining = scheduled.filter((h) => !isDone(h, day));
   const timeNow = new Intl.DateTimeFormat("en-GB", {
     timeZone: state.settings.timezone,
     hour: "2-digit",
@@ -297,7 +301,7 @@ export default function Dashboard({
       icon: <Moon size={16} />,
     },
   ];
-  const rows = day.habits
+  const rows = scheduled
     .filter(
       (h) =>
         filter === "all" ||
@@ -343,20 +347,25 @@ export default function Dashboard({
               )}
             </h2>
             <p>
-              {remaining.length
-                ? `${completedToday} de ${day.habits.length} hábitos concluídos. Seu próximo passo conta.`
-                : "Reserve um momento para reconhecer seu esforço."}
+              {!scheduled.length
+                ? "Nenhum hábito previsto nesta seleção. Você pode ajustar sua rotina."
+                : remaining.length
+                  ? `${completedToday} de ${scheduled.length} hábitos concluídos. Seu próximo passo conta.`
+                  : "Reserve um momento para reconhecer seu esforço."}
             </p>
             <button
               className="hero-action"
               onClick={() => {
-                if (remaining[0]) openHabit(remaining[0]);
+                if (!scheduled.length) nav("rotina");
+                else if (remaining[0]) openHabit(remaining[0]);
                 else nav("diario");
               }}
             >
-              {remaining.length
-                ? "Continuar meu dia"
-                : "Registrar minha vitória"}
+              {!scheduled.length
+                ? "Editar minha rotina"
+                : remaining.length
+                  ? "Continuar meu dia"
+                  : "Registrar minha vitória"}
               <ArrowUpRight size={16} />
             </button>
           </div>
@@ -421,6 +430,64 @@ export default function Dashboard({
           </div>
         </section>
       </div>
+      <section className="day-mode" aria-label="Ritmo do dia">
+        <div>
+          <strong>
+            {date !== today
+              ? "O ritmo deste dia ficou registrado."
+              : day.mode === "essential"
+                ? "Hoje, cuide do essencial."
+                : "Qual é o ritmo de hoje?"}
+          </strong>
+          <p>
+            {date === today
+              ? "Escolha uma lista menor quando precisar. Metas e registros são preservados."
+              : "O ritmo escolhido ficou registrado neste dia."}
+          </p>
+        </div>
+        <div className="mode-options">
+          {(
+            [
+              { id: "full", label: "Rotina completa" },
+              { id: "essential", label: "Dia essencial" },
+            ] as const
+          ).map((mode) => (
+            <button
+              key={mode.id}
+              aria-pressed={(day.mode ?? "full") === mode.id}
+              disabled={
+                busy ||
+                date !== today ||
+                (mode.id === "essential" && !day.habits.some(isEssential))
+              }
+              onClick={() =>
+                mutate(`/api/day/${date}`, { mode: mode.id }, "PATCH")
+              }
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+        {!day.habits.some(isEssential) && (
+          <button className="text-button" onClick={() => nav("rotina")}>
+            Escolher hábitos essenciais
+          </button>
+        )}
+      </section>
+      <div className="rhythm-shortcuts">
+        <button onClick={() => nav("foco")}>
+          <Zap size={16} />
+          <span>Uma coisa de cada vez</span>
+          <strong>Abrir foco</strong>
+          <ArrowUpRight size={15} />
+        </button>
+        <button onClick={() => nav("semana")}>
+          <BookIcon />
+          <span>Olhe para a sua semana</span>
+          <strong>Fazer revisão</strong>
+          <ArrowUpRight size={15} />
+        </button>
+      </div>
       <div className="metrics-strip">
         <Metric
           icon={<CircleCheck size={21} />}
@@ -428,13 +495,15 @@ export default function Dashboard({
           value={
             <>
               {completedToday}
-              <small> / {day.habits.length}</small>
+              <small> / {scheduled.length}</small>
             </>
           }
           detail={
-            remaining.length
-              ? `${remaining.length} oportunidades à frente`
-              : "Dia completo. Celebre!"
+            !scheduled.length
+              ? "Nenhum hábito previsto nesta seleção"
+              : remaining.length
+                ? `${remaining.length} oportunidades à frente`
+                : "Dia completo. Celebre!"
           }
           color="green"
         />
@@ -510,7 +579,7 @@ export default function Dashboard({
                   onClick={() => setFilter(id)}
                 >
                   {label}
-                  {id === "all" && <span>{day.habits.length}</span>}
+                  {id === "all" && <span>{scheduled.length}</span>}
                 </button>
               ))}
             </div>

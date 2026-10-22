@@ -1,4 +1,5 @@
 import type { Category, Day, Habit, State } from "./types";
+import essentialIds from "../shared/essential-habits.json" with { type: "json" };
 export const categories: Record<
   Category,
   {
@@ -66,6 +67,8 @@ export function dayFor(state: State, key: string): Day {
       next: "",
       workout: null,
       threshold: state.settings.dailyThreshold,
+      mode: "full",
+      focusSessions: [],
     }
   );
 }
@@ -76,29 +79,39 @@ export function habitValue(h: Habit, d: Day) {
       ? (d.sleep ?? 0)
       : (d.entries[h.id] ?? 0);
 }
+export function isEssential(h: Habit) {
+  return h.essential ?? essentialIds.includes(h.id);
+}
+export function activeHabits(d: Day) {
+  return d.mode === "essential" ? d.habits.filter(isEssential) : d.habits;
+}
 export function isDone(h: Habit, d: Day) {
   return habitValue(h, d) >= h.target;
 }
 export function score(d: Day) {
-  return d.habits.length
+  const habits = activeHabits(d);
+  return habits.length
     ? Math.min(
-        completed(d) === d.habits.length ? 100 : 99,
+        completed(d) === habits.length ? 100 : 99,
         Math.round(
-          (d.habits.reduce(
+          (habits.reduce(
             (n, h) => n + Math.min(1, habitValue(h, d) / h.target),
             0,
           ) /
-            d.habits.length) *
+            habits.length) *
             100,
         ),
       )
     : 0;
 }
 export function completed(d: Day) {
+  return activeHabits(d).filter((h) => isDone(h, d)).length;
+}
+export function allCompleted(d: Day) {
   return d.habits.filter((h) => isDone(h, d)).length;
 }
 export function xpTotal(s: State) {
-  return Object.values(s.days).reduce((n, d) => n + completed(d) * 10, 0);
+  return Object.values(s.days).reduce((n, d) => n + allCompleted(d) * 10, 0);
 }
 export function streak(s: State, today: string) {
   let key =
@@ -108,7 +121,7 @@ export function streak(s: State, today: string) {
   let count = 0;
   while (key >= s.settings.startDate) {
     const d = s.days[key];
-    if (!d || !d.habits.length || score(d) < d.threshold) break;
+    if (!d || !activeHabits(d).length || score(d) < d.threshold) break;
     count++;
     key = addDays(key, -1);
   }
@@ -123,7 +136,8 @@ export function bestStreak(s: State) {
     key = addDays(key, 1)
   ) {
     const d = s.days[key];
-    current = d && d.habits.length && score(d) >= d.threshold ? current + 1 : 0;
+    current =
+      d && activeHabits(d).length && score(d) >= d.threshold ? current + 1 : 0;
     best = Math.max(best, current);
   }
   return best;

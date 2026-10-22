@@ -22,21 +22,18 @@ import {
   Utensils,
   WifiOff,
   X,
+  Timer,
+  CalendarCheck2,
 } from "lucide-react";
 import type { Habit, PageId, State } from "./types";
-import {
-  api,
-  completed,
-  dateLabel,
-  dayFor,
-  habitValue,
-  todayKey,
-  xpTotal,
-} from "./lib";
+import { api, dateLabel, dayFor, habitValue, todayKey, xpTotal } from "./lib";
 import { DatePicker, Logo, Modal, useNow } from "./ui";
 import { HabitDetail, HabitForm } from "./forms";
 import Auth from "./Auth";
 import Dashboard from "./Dashboard";
+import { FocusPage, FocusIndicator } from "./Focus";
+import { ReviewPage } from "./Review";
+import { weekStart } from "./review-data";
 import {
   ConfirmDialog,
   WelcomePanel,
@@ -55,6 +52,8 @@ const navItems = [
   { id: "treinos", title: "Treinos", icon: Dumbbell },
   { id: "alimentacao", title: "Alimentação", icon: Utensils },
   { id: "diario", title: "Meu diário", icon: BookOpen },
+  { id: "foco", title: "Tempo de foco", icon: Timer },
+  { id: "semana", title: "Revisão semanal", icon: CalendarCheck2 },
 ] as const;
 const pageNames: Record<PageId, string> = {
   hoje: "Visão geral",
@@ -64,6 +63,8 @@ const pageNames: Record<PageId, string> = {
   alimentacao: "Alimentação",
   diario: "Meu diário",
   ajustes: "Ajustes",
+  foco: "Tempo de foco",
+  semana: "Revisão semanal",
 };
 const validPage = (hash: string): PageId =>
   hash in pageNames ? (hash as PageId) : "hoje";
@@ -151,7 +152,7 @@ export default function App() {
     mutating.current = true;
     setBusy(true);
     try {
-      const before = state ? completed(dayFor(state, date)) : 0;
+      const before = state ? xpTotal(state) : 0;
       const result = await api<
         | State
         | {
@@ -165,11 +166,11 @@ export default function App() {
           date > todayKey(result.settings.timezone)
         )
           setDate(todayKey(result.settings.timezone));
-        const gained = completed(dayFor(result, date)) - before;
+        const gained = xpTotal(result) - before;
         setToast({
           message:
             gained > 0
-              ? `Pequena vitória! +${gained * 10} XP`
+              ? `Pequena vitória! +${gained} XP`
               : "Salvo. Cada passo conta.",
           error: false,
         });
@@ -204,7 +205,7 @@ export default function App() {
     if (journalDirty.current) {
       confirm(
         "Sair sem salvar?",
-        "Há alterações no diário que ainda não foram salvas. Ao continuar, elas serão descartadas.",
+        "Há anotações que ainda não foram salvas. Ao continuar, elas serão descartadas.",
         async () => {
           journalDirty.current = false;
           action();
@@ -515,6 +516,7 @@ export default function App() {
             <strong>{pageNames[page]}</strong>
           </div>
           <div className="topbar-right">
+            <FocusIndicator session={state.focus} onOpen={() => nav("foco")} />
             <span className="local-status">
               <span className="live-dot" />
               {busy ? "Salvando…" : "Tudo no seu ritmo"}
@@ -620,6 +622,10 @@ export default function App() {
               <FoodPage {...props} />
             ) : page === "diario" ? (
               <JournalPage key={date} {...props} />
+            ) : page === "foco" ? (
+              <FocusPage {...props} />
+            ) : page === "semana" ? (
+              <ReviewPage key={weekStart(date)} {...props} />
             ) : (
               <SettingsPage {...props} />
             )}

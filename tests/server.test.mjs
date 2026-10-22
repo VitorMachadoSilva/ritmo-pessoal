@@ -277,6 +277,204 @@ test("private application: onboarding, sessions, history, backup, validation and
     },
   );
   await t.test(
+    "essential mode persists without resetting entries and historical mode cannot be rewritten",
+    async () => {
+      const before = (await req("/api/state")).data;
+      const changed = await req(
+        `/api/day/${today}`,
+        { mode: "essential" },
+        "PATCH",
+      );
+      assert.equal(changed.status, 200);
+      assert.equal(changed.data.days[today].mode, "essential");
+      assert.deepEqual(
+        changed.data.days[today].entries,
+        before.days[today].entries,
+      );
+      const yesterday = new Date(`${today}T12:00:00`);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const key = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+      assert.equal(
+        (await req(`/api/day/${key}`, { mode: "essential" }, "PATCH")).status,
+        400,
+      );
+      assert.equal(
+        (await req(`/api/day/${today}`, { mode: "full" }, "PATCH")).status,
+        200,
+      );
+    },
+  );
+  await t.test(
+    "focus is private, singleton, pauseable, resumable and cancellable",
+    async () => {
+      assert.equal(
+        (
+          await req(
+            "/api/focus/start",
+            { label: "Ler", minutes: 25 },
+            undefined,
+            false,
+          )
+        ).status,
+        401,
+      );
+      assert.equal(
+        (
+          await req("/api/focus/start", {
+            label: "Ler",
+            minutes: 25,
+            habitId: "water",
+          })
+        ).status,
+        400,
+      );
+      const start = await req("/api/focus/start", {
+        label: "Ler",
+        minutes: 25,
+      });
+      assert.equal(start.status, 201);
+      assert.ok(start.data.focus.resumedAt);
+      assert.equal(
+        (await req("/api/focus/start", { label: "Outra", minutes: 25 })).status,
+        409,
+      );
+      assert.equal((await req("/api/focus/finish", {})).status, 400);
+      assert.equal(
+        (await req("/api/focus/pause", {})).data.focus.resumedAt,
+        null,
+      );
+      assert.equal((await req("/api/focus/pause", {})).status, 409);
+      assert.equal((await req("/api/focus/resume", {})).status, 200);
+      assert.equal((await req("/api/focus/cancel", {})).data.focus, null);
+      assert.equal((await req("/api/focus/finish", {})).status, 409);
+    },
+  );
+  await t.test(
+    "completed focus marks linked habit once and log deletion preserves habit",
+    async () => {
+      const state = (await req("/api/export")).data;
+      const habit = state.days[today].habits.find(
+        (h) => h.category === "mente" && h.kind === "check",
+      );
+      state.days[today].entries[habit.id] = 0;
+      state.focus = {
+        id: "finished-test",
+        date: today,
+        label: "Revisar capítulo",
+        targetMinutes: 1,
+        startedAt: Date.now() - 60000,
+        resumedAt: null,
+        elapsedMs: 60000,
+        habitId: habit.id,
+      };
+      assert.equal((await req("/api/import", state)).status, 200);
+      const result = await req("/api/focus/finish", {});
+      assert.equal(result.status, 200);
+      assert.equal(result.data.focus, null);
+      assert.equal(result.data.days[today].entries[habit.id], habit.target);
+      assert.equal(result.data.days[today].focusSessions.length, 1);
+      assert.equal(result.data.days[today].focusSessions[0].completed, true);
+      assert.equal((await req("/api/focus/finish", {})).status, 409);
+      const deleted = await req(
+        `/api/focus/${today}/finished-test`,
+        {},
+        "DELETE",
+      );
+      assert.equal(deleted.status, 200);
+      assert.equal(deleted.data.days[today].focusSessions.length, 0);
+      assert.equal(deleted.data.days[today].entries[habit.id], habit.target);
+    },
+  );
+  await t.test(
+    "weekly reflection is editable, validates dates and persists independently of journal",
+    async () => {
+      const date = new Date(`${today}T12:00:00`);
+      date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+      const monday = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const note = {
+        worked: "Caminhar",
+        adjustment: "Dormir mais cedo",
+        priority: "Preparar a semana",
+      };
+      const result = await req(`/api/weeks/${monday}`, note, "PUT");
+      assert.equal(result.status, 200);
+      assert.deepEqual(result.data.weeks[monday], note);
+      assert.equal(
+        (await req("/api/state")).data.days[today].journal,
+        "Um dia de cada vez.",
+      );
+      assert.equal(
+        (await req("/api/weeks/2026-02-31", note, "PUT")).status,
+        400,
+      );
+      assert.equal(
+        (await req("/api/weeks/2099-01-05", note, "PUT")).status,
+        400,
+      );
+      assert.equal(
+        (
+          await req(
+            `/api/weeks/${monday}`,
+            { ...note, worked: "x".repeat(2001) },
+            "PUT",
+          )
+        ).status,
+        400,
+      );
+    },
+  );
+  await t.test(
+    "partial focus records minutes without marking a linked habit",
+    async () => {
+      const state = (await req("/api/export")).data;
+      const habit = state.days[today].habits.find(
+        (h) => h.category === "mente" && h.kind === "check",
+      );
+      state.days[today].entries[habit.id] = 0;
+      state.focus = {
+        id: "partial-test",
+        date: today,
+        label: "Sessão parcial",
+        targetMinutes: 25,
+        startedAt: Date.now() - 60000,
+        resumedAt: null,
+        elapsedMs: 60000,
+        habitId: habit.id,
+      };
+      await req("/api/import", state);
+      const result = await req("/api/focus/finish", {});
+      assert.equal(result.status, 200);
+      assert.equal(result.data.days[today].entries[habit.id], 0);
+      assert.equal(
+        result.data.days[today].focusSessions.at(-1).completed,
+        false,
+      );
+      assert.equal(result.data.days[today].focusSessions.at(-1).minutes, 1);
+    },
+  );
+  await t.test(
+    "legacy import fills new fields without deleting journal or changing credentials",
+    async () => {
+      const legacy = (await req("/api/export")).data;
+      delete legacy.focus;
+      delete legacy.weeks;
+      legacy.habits.forEach((h) => delete h.essential);
+      Object.values(legacy.days).forEach((d) => {
+        delete d.mode;
+        delete d.focusSessions;
+        d.habits.forEach((h) => delete h.essential);
+      });
+      assert.equal((await req("/api/import", legacy)).status, 200);
+      const state = (await req("/api/state")).data;
+      assert.equal(state.focus, null);
+      assert.deepEqual(state.weeks, {});
+      assert.equal(state.days[today].mode, "full");
+      assert.deepEqual(state.days[today].focusSessions, []);
+      assert.equal(state.days[today].journal, "Um dia de cada vez.");
+      assert.equal(state.habits.find((h) => h.id === "water").essential, true);
+    },
+  );
+  await t.test(
     "logout revokes session, wrong passwords fail, changing password revokes old credentials",
     async () => {
       await req("/api/logout", {});

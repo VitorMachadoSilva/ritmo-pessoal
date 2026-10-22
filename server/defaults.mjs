@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import essentialIds from "../shared/essential-habits.json" with { type: "json" };
 
 export const dateKey = (tz = "America/Sao_Paulo") =>
   new Intl.DateTimeFormat("en-CA", {
@@ -31,6 +32,7 @@ export function initialState(name) {
     unit,
     createdDate: start,
     archived: false,
+    essential: essentialIds.includes(id),
   });
   const exercise = (name, sets, reps) => ({
     id: randomUUID(),
@@ -40,6 +42,8 @@ export function initialState(name) {
   });
   return {
     version: 1,
+    focus: null,
+    weeks: {},
     settings: {
       name,
       startDate: start,

@@ -12,6 +12,7 @@ export type Habit = {
   unit: string;
   createdDate: string;
   archived: boolean;
+  essential?: boolean;
 };
 export type Settings = {
   name: string;
@@ -74,7 +75,29 @@ export type Day = {
   next: string;
   workout: WorkoutRecord | null;
   threshold: number;
+  mode?: "full" | "essential";
+  focusSessions?: FocusLog[];
 };
+export type FocusSession = {
+  id: string;
+  date: string;
+  label: string;
+  targetMinutes: number;
+  startedAt: number;
+  resumedAt: number | null;
+  elapsedMs: number;
+  habitId: string | null;
+};
+export type FocusLog = {
+  id: string;
+  label: string;
+  minutes: number;
+  startedAt: number;
+  finishedAt: number;
+  completed: boolean;
+  habitId: string | null;
+};
+export type WeekNote = { worked: string; adjustment: string; priority: string };
 export type State = {
   version: 1;
   settings: Settings;
@@ -82,6 +105,8 @@ export type State = {
   days: Record<string, Day>;
   workouts: Workout[];
   meals: Meal[];
+  focus?: FocusSession | null;
+  weeks?: Record<string, WeekNote>;
 };
 export type PageId =
   | "hoje"
@@ -90,6 +115,8 @@ export type PageId =
   | "treinos"
   | "alimentacao"
   | "diario"
+  | "foco"
+  | "semana"
   | "ajustes";
 export type Mutation = (
   url: string,

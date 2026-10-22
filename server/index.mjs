@@ -13,6 +13,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { dateKey, initialState } from "./defaults.mjs";
+import essentialIds from "../shared/essential-habits.json" with { type: "json" };
+import { FocusError, pauseFocus, resumeFocus, finishFocus } from "./focus.mjs";
 import {
   dayKey,
   habitSchema,
@@ -21,6 +23,7 @@ import {
   mealSchema,
   stateSchema,
   dayPatch,
+  weekNoteSchema,
 } from "./schema.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -71,8 +74,20 @@ app.use("/api", (req, res, next) => {
   next();
 });
 const digest = (t) => createHash("sha256").update(t).digest("hex");
-const getState = () =>
-  JSON.parse(db.prepare("SELECT data FROM app_state WHERE id=1").get().data);
+const getState = () => {
+  const state = JSON.parse(
+    db.prepare("SELECT data FROM app_state WHERE id=1").get().data,
+  );
+  state.focus ??= null;
+  state.weeks ??= {};
+  for (const h of state.habits) h.essential ??= essentialIds.includes(h.id);
+  for (const d of Object.values(state.days)) {
+    d.mode ??= "full";
+    d.focusSessions ??= [];
+    for (const h of d.habits) h.essential ??= essentialIds.includes(h.id);
+  }
+  return state;
+};
 const save = (state) =>
   db
     .prepare("INSERT OR REPLACE INTO app_state(id,data) VALUES(1,?)")
@@ -256,6 +271,8 @@ function getDay(state, date) {
     next: "",
     workout: null,
     threshold: state.settings.dailyThreshold,
+    mode: "full",
+    focusSessions: [],
   });
 }
 function updateToday(state) {
@@ -277,6 +294,23 @@ app.patch(
       });
     const input = dayPatch.parse(req.body);
     const day = getDay(state, date);
+    if (input.mode !== undefined) {
+      if (date !== today)
+        return res
+          .status(400)
+          .json({
+            error:
+              "O ritmo do dia só pode ser ajustado em hoje. O histórico permanece como foi registrado.",
+          });
+      if (input.mode === "essential" && !day.habits.some((h) => h.essential))
+        return res
+          .status(400)
+          .json({
+            error:
+              "Escolha ao menos um hábito essencial em Minha rotina antes de ativar este modo.",
+          });
+      day.mode = input.mode;
+    }
     if (input.habitId !== undefined) {
       const habit = day.habits.find((h) => h.id === input.habitId);
       if (!habit)
@@ -405,6 +439,123 @@ for (const [collection, schema] of [
     }),
   );
 }
+app.post(
+  "/api/focus/start",
+  route((req, res) => {
+    const input = z
+      .object({
+        label: z.string().trim().min(1).max(120),
+        minutes: z.number().int().min(1).max(120),
+        habitId: z.string().max(100).nullable().optional(),
+      })
+      .parse(req.body);
+    const state = getState();
+    if (state.focus)
+      throw new FocusError(
+        "Você já tem uma sessão aberta. Retome, registre ou descarte antes de começar outra.",
+        409,
+      );
+    const date = dateKey(state.settings.timezone),
+      day = getDay(state, date);
+    if ((day.focusSessions?.length ?? 0) >= 100)
+      throw new FocusError("Você atingiu o limite de sessões deste dia.");
+    if (
+      input.habitId &&
+      !day.habits.some(
+        (h) =>
+          h.id === input.habitId &&
+          h.kind === "check" &&
+          h.category === "mente",
+      )
+    )
+      throw new FocusError("Escolha um hábito de foco agendado para hoje.");
+    const now = Date.now();
+    state.focus = {
+      id: randomUUID(),
+      date,
+      label: input.label,
+      targetMinutes: input.minutes,
+      startedAt: now,
+      resumedAt: now,
+      elapsedMs: 0,
+      habitId: input.habitId ?? null,
+    };
+    save(state);
+    res.status(201).json(state);
+  }),
+);
+for (const action of ["pause", "resume", "finish", "cancel"]) {
+  app.post(
+    `/api/focus/${action}`,
+    route((req, res) => {
+      const state = getState();
+      if (!state.focus)
+        throw new FocusError(
+          "Esta sessão já foi encerrada. Atualize a página para continuar.",
+          409,
+        );
+      if (action === "pause") state.focus = pauseFocus(state.focus);
+      if (action === "resume") state.focus = resumeFocus(state.focus);
+      if (action === "finish") {
+        const session = state.focus,
+          log = finishFocus(session),
+          day = getDay(state, session.date);
+        if (day.focusSessions.length >= 100)
+          throw new FocusError("Limite de sessões deste dia atingido.");
+        if (day.focusSessions.some((s) => s.id === log.id))
+          throw new FocusError("Esta sessão já foi registrada.", 409);
+        day.focusSessions.push(log);
+        if (log.completed && session.habitId) {
+          const habit = day.habits.find(
+            (h) => h.id === session.habitId && h.kind === "check",
+          );
+          if (habit) day.entries[habit.id] = habit.target;
+        }
+        state.focus = null;
+      }
+      if (action === "cancel") state.focus = null;
+      save(state);
+      res.json(state);
+    }),
+  );
+}
+app.delete(
+  "/api/focus/:date/:id",
+  route((req, res) => {
+    const date = dayKey.parse(req.params.date),
+      state = getState(),
+      day = state.days[date];
+    if (!day?.focusSessions.some((s) => s.id === req.params.id))
+      return res.status(404).json({ error: "Registro não encontrado." });
+    day.focusSessions = day.focusSessions.filter((s) => s.id !== req.params.id);
+    save(state);
+    res.json(state);
+  }),
+);
+app.put(
+  "/api/weeks/:date",
+  route((req, res) => {
+    const date = dayKey.parse(req.params.date),
+      state = getState(),
+      today = dateKey(state.settings.timezone);
+    const start = new Date(`${state.settings.startDate}T12:00:00`);
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    const firstWeek = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+    if (
+      new Date(`${date}T12:00:00`).getDay() !== 1 ||
+      date > today ||
+      date < firstWeek
+    )
+      return res
+        .status(400)
+        .json({ error: "Escolha uma semana da sua jornada, até hoje." });
+    if (Object.keys(state.weeks).length >= 1000 && !state.weeks[date])
+      throw new FocusError("Limite de revisões atingido.");
+    state.weeks[date] = weekNoteSchema.parse(req.body);
+    save(state);
+    res.json(state);
+  }),
+);
 app.get(
   "/api/export",
   route((req, res) =>
@@ -424,6 +575,16 @@ app.post(
       return res
         .status(400)
         .json({ error: "A data inicial do backup é inválida." });
+    if (
+      state.focus &&
+      (state.focus.date < state.settings.startDate ||
+        state.focus.date > dateKey(state.settings.timezone))
+    )
+      return res
+        .status(400)
+        .json({
+          error: "A sessão de foco está fora do período da sua rotina.",
+        });
     save(state);
     res.json(state);
   }),
@@ -447,6 +608,8 @@ if (production) {
 }
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
+  if (error instanceof FocusError)
+    return res.status(error.status).json({ error: error.message });
   if (error instanceof z.ZodError)
     return res.status(400).json({
       error: error.issues[0]?.message || "Confira os dados preenchidos.",

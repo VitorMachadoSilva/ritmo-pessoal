@@ -28,6 +28,7 @@ export const habitSchema = z.object({
   unit: z.string().max(20),
   createdDate: dayKey,
   archived: z.boolean(),
+  essential: z.boolean().optional(),
 });
 export const settingsSchema = z.object({
   name: short,
@@ -96,6 +97,30 @@ export const workoutRecord = z.object({
     )
     .max(20),
 });
+export const focusSessionSchema = z.object({
+  id: z.string().max(100),
+  date: dayKey,
+  label: short,
+  targetMinutes: z.number().int().min(1).max(120),
+  startedAt: z.number().int().nonnegative(),
+  resumedAt: z.number().int().nonnegative().nullable(),
+  elapsedMs: z.number().min(0).max(7200000),
+  habitId: z.string().max(100).nullable(),
+});
+export const focusLogSchema = z.object({
+  id: z.string().max(100),
+  label: short,
+  minutes: z.number().min(0).max(120),
+  startedAt: z.number().int().nonnegative(),
+  finishedAt: z.number().int().nonnegative(),
+  completed: z.boolean(),
+  habitId: z.string().max(100).nullable(),
+});
+export const weekNoteSchema = z.object({
+  worked: z.string().max(2000),
+  adjustment: z.string().max(2000),
+  priority: z.string().max(1000),
+});
 export const daySchema = z.object({
   habits: z.array(habitSchema).max(200),
   entries: z.record(z.string().max(100), z.number().min(0).max(20000)),
@@ -109,6 +134,8 @@ export const daySchema = z.object({
   next: z.string().max(1000),
   workout: workoutRecord.nullable(),
   threshold: z.number().int().min(1).max(100),
+  mode: z.enum(["full", "essential"]).default("full"),
+  focusSessions: z.array(focusLogSchema).max(100).default([]),
 });
 export const stateSchema = z.object({
   version: z.literal(1),
@@ -119,6 +146,11 @@ export const stateSchema = z.object({
     .refine((v) => Object.keys(v).length <= 5000),
   workouts: z.array(workoutSchema).max(50),
   meals: z.array(mealSchema).max(30),
+  focus: focusSessionSchema.nullable().default(null),
+  weeks: z
+    .record(dayKey, weekNoteSchema)
+    .refine((v) => Object.keys(v).length <= 1000)
+    .default({}),
 });
 export const dayPatch = z.object({
   habitId: z.string().max(100).optional(),
@@ -132,4 +164,5 @@ export const dayPatch = z.object({
   win: z.string().max(1000).optional(),
   next: z.string().max(1000).optional(),
   workout: workoutRecord.nullable().optional(),
+  mode: z.enum(["full", "essential"]).optional(),
 });
