@@ -5,6 +5,9 @@ export default defineConfig({
   build: {
     sourcemap: false,
     chunkSizeWarningLimit: 650,
-    rollupOptions: { output: { manualChunks: { charts: ["recharts"] } } },
+    rollupOptions: {
+      input: { app: "index.html", preview: "transition-preview.html", logoutPreview: "logout-preview.html" },
+      output: { manualChunks: { charts: ["recharts"] } },
+    },
   },
 });

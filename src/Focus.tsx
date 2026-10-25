@@ -12,6 +12,8 @@ import type { FocusSession } from "./types";
 import type { PageProps } from "./pages";
 import { dateLabel, dayFor, number } from "./lib";
 import { clockLabel, focusElapsed, focusRemaining } from "./timer";
+import { usePageDraft } from "./drafts";
+import { TutorialTrigger } from "./GuidedTutorial";
 
 function useClock() {
   const [now, setNow] = useState(Date.now());
@@ -56,7 +58,9 @@ export function FocusPage(p: PageProps) {
   const [minutes, setMinutes] = useState(25);
   const [label, setLabel] = useState("");
   const [habitId, setHabitId] = useState("");
+  const [dirty, setDirty] = useState(false);
   const session = p.state.focus;
+  usePageDraft(dirty && !session);
   const day = dayFor(p.state, p.date);
   const logs = day.focusSessions ?? [];
   const habits = dayFor(p.state, p.today).habits.filter(
@@ -67,15 +71,16 @@ export function FocusPage(p: PageProps) {
   const finished = !!session && remaining === 0;
   async function start(e: React.FormEvent) {
     e.preventDefault();
-    await p.mutate("/api/focus/start", {
+    const saved = await p.mutate("/api/focus/start", {
       label: label.trim(),
       minutes,
       habitId: habitId || null,
     });
+    if (saved) setDirty(false);
   }
   return (
     <>
-      <div className="page-intro">
+      <div className="page-intro" data-tutorial-target="focus-intro">
         <div>
           <h2>Abra espaço para uma coisa.</h2>
           <p>
@@ -85,6 +90,7 @@ export function FocusPage(p: PageProps) {
       </div>
       <div className="focus-layout">
         <section
+          data-tutorial-target="focus-stage"
           className={`focus-stage ${finished ? "finished" : ""}`}
           aria-label="Cronômetro de foco"
         >
@@ -143,7 +149,7 @@ export function FocusPage(p: PageProps) {
                     onClick={() =>
                       p.mutate(
                         `/api/focus/${session.resumedAt === null ? "resume" : "pause"}`,
-                        {},
+                        { sessionId: session.id },
                       )
                     }
                   >
@@ -158,7 +164,9 @@ export function FocusPage(p: PageProps) {
                 <button
                   className="button focus-light"
                   disabled={p.busy || elapsed < 60000}
-                  onClick={() => p.mutate("/api/focus/finish", {})}
+                  onClick={() =>
+                    p.mutate("/api/focus/finish", { sessionId: session.id })
+                  }
                 >
                   <Check size={17} />
                   {finished ? "Concluir e registrar" : "Registrar sessão"}
@@ -170,7 +178,10 @@ export function FocusPage(p: PageProps) {
                     p.confirm(
                       "Descartar esta sessão?",
                       "O tempo desta sessão não será registrado. Seus outros registros serão preservados.",
-                      () => p.mutate("/api/focus/cancel", {}),
+                      () =>
+                        p.mutate("/api/focus/cancel", {
+                          sessionId: session.id,
+                        }),
                     )
                   }
                 >
@@ -192,9 +203,10 @@ export function FocusPage(p: PageProps) {
                 : "Sem pontuação extra por deixar o relógio rodando."}
           </p>
         </section>
-        <section className="panel focus-setup">
+        <section className="panel focus-setup" data-tutorial-target="focus-setup">
           <div className="section-heading">
             <h3>{session ? "Proteja este intervalo" : "Prepare seu foco"}</h3>
+            <TutorialTrigger id="feature-focus" completed={p.completedTutorials.includes("feature-focus")} onStart={p.startTutorial} />
             <Timer size={18} />
           </div>
           {session ? (
@@ -215,7 +227,7 @@ export function FocusPage(p: PageProps) {
               </div>
             </div>
           ) : (
-            <form className="stack-form" onSubmit={start}>
+            <form className="stack-form" onSubmit={start} onChange={() => setDirty(true)}>
               <label>
                 O que você vai fazer?
                 <input
@@ -234,7 +246,7 @@ export function FocusPage(p: PageProps) {
                       key={n}
                       type="button"
                       aria-pressed={minutes === n}
-                      onClick={() => setMinutes(n)}
+                      onClick={() => { setMinutes(n); setDirty(true); }}
                     >
                       {n} min
                     </button>

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Plus, Trash2, Save, ArchiveRestore, Check, Minus } from "lucide-react";
-import { categories, weekdays, isEssential } from "./lib";
+import { usePageDraft } from "./drafts";
+import { Plus, Trash2, Save, ArchiveRestore, Check, Minus, ChevronLeft, ChevronRight } from "lucide-react";
+import { categories, weekdays, habitDifficulty, habitXp, isEssential } from "./lib";
 import type {
   Category,
   Habit,
@@ -47,6 +48,7 @@ export function HabitForm({
         unit: kind === "check" ? "" : data.get("unit") || habit?.unit || "",
         archived: habit?.archived ?? false,
         essential: data.get("essential") === "on",
+        difficulty: data.get("difficulty"),
       },
       habit ? "PUT" : "POST",
     );
@@ -149,6 +151,15 @@ export function HabitForm({
         </p>
       )}
       <label>
+        Esforço deste hábito
+        <select name="difficulty" defaultValue={habit ? habitDifficulty(habit) : "moderate"}>
+          <option value="light">Leve · 10 XP</option>
+          <option value="moderate">Moderado · 20 XP</option>
+          <option value="challenging">Desafiador · 30 XP</option>
+        </select>
+        <small className="field-help">Escolha pelo esforço que exige de você. Vale ao atingir a meta; registros parciais ficam sem XP.</small>
+      </label>
+      <label>
         Detalhes e lembretes
         <textarea
           name="description"
@@ -177,7 +188,12 @@ export function HabitForm({
         </p>
       )}
       <div className="modal-actions">
-        <button type="button" className="button secondary" onClick={onClose}>
+        <button
+          data-close-dialog
+          type="button"
+          className="button secondary"
+          onClick={onClose}
+        >
           Cancelar
         </button>
         <button className="button primary" disabled={busy}>
@@ -278,7 +294,12 @@ export function MealForm({
         ingestão real.
       </p>
       <div className="modal-actions">
-        <button type="button" className="button secondary" onClick={onClose}>
+        <button
+          data-close-dialog
+          type="button"
+          className="button secondary"
+          onClick={onClose}
+        >
           Cancelar
         </button>
         <button className="button primary" disabled={busy}>
@@ -349,6 +370,7 @@ export function WorkoutForm({
             className="text-button"
             type="button"
             disabled={exercises.length >= 20}
+            data-draft-change
             onClick={() =>
               setExercises([
                 ...exercises,
@@ -416,6 +438,7 @@ export function WorkoutForm({
               className="icon-button danger-text"
               type="button"
               aria-label={`Remover exercício ${i + 1}`}
+              data-draft-change
               disabled={exercises.length === 1}
               onClick={() =>
                 setExercises(exercises.filter((v) => v.id !== ex.id))
@@ -436,7 +459,12 @@ export function WorkoutForm({
         />
       </label>
       <div className="modal-actions">
-        <button type="button" className="button secondary" onClick={onClose}>
+        <button
+          data-close-dialog
+          type="button"
+          className="button secondary"
+          onClick={onClose}
+        >
           Cancelar
         </button>
         <button className="button primary" disabled={busy}>
@@ -455,6 +483,8 @@ export function SettingsForm({
   mutate: Mutation;
 }) {
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  usePageDraft(dirty);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
@@ -462,11 +492,15 @@ export function SettingsForm({
     for (const [k, v] of data)
       input[k] = ["name", "timezone"].includes(k) ? v : Number(v);
     setBusy(true);
-    await mutate("/api/settings", input, "PUT");
+    if (await mutate("/api/settings", input, "PUT")) setDirty(false);
     setBusy(false);
   }
   return (
-    <form onSubmit={submit} className="stack-form">
+    <form
+      onSubmit={submit}
+      onChange={() => setDirty(true)}
+      className="stack-form"
+    >
       <div className="form-grid">
         <label>
           Seu nome
@@ -592,6 +626,11 @@ export function SettingsForm({
         hidratação e treino com profissionais que conheçam seu histórico.
       </p>
       <div className="form-end">
+        {dirty && (
+          <span className="field-help" role="status">
+            Alterações não salvas
+          </span>
+        )}
         <button className="button primary" disabled={busy}>
           <Save size={16} />
           {busy ? "Salvando…" : "Salvar minhas metas"}
@@ -670,7 +709,12 @@ export function PasswordForm({
         As outras sessões serão encerradas. Sua sessão atual continuará ativa.
       </p>
       <div className="modal-actions">
-        <button type="button" className="button secondary" onClick={onClose}>
+        <button
+          data-close-dialog
+          type="button"
+          className="button secondary"
+          onClick={onClose}
+        >
           Cancelar
         </button>
         <button className="button primary" disabled={busy}>
@@ -683,6 +727,10 @@ export function PasswordForm({
 export function HabitDetail({
   habit,
   value,
+  index,
+  total,
+  onPrevious,
+  onNext,
   onSave,
   onEdit,
   onArchive,
@@ -690,16 +738,58 @@ export function HabitDetail({
 }: {
   habit: Habit;
   value: number;
+  index: number;
+  total: number;
+  onPrevious?: () => void;
+  onNext?: () => void;
   onSave: (value: number) => Promise<boolean>;
   onEdit: () => void;
   onArchive: () => void;
   onClose: () => void;
 }) {
-  const [amount, setAmount] = useState(value),
-    [busy, setBusy] = useState(false);
+  const [amount, setAmount] = useState(String(value));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const amountId = `habit-amount-${habit.id}`;
   const isCounter = habit.kind !== "check";
+  const limit = habit.kind === "sleep" ? 24 : habit.kind === "water" ? 10000 : 20000;
+  const step = habit.kind === "water" ? 250 : habit.kind === "sleep" ? 0.5 : 1;
+  const parsed = Number(amount.replace(",", "."));
+  const validFormat = habit.kind === "sleep"
+    ? /^\d+(?:[.,]\d{1,2})?$/.test(amount)
+    : /^\d+$/.test(amount);
+  const valid = validFormat && Number.isFinite(parsed) && parsed <= limit;
+  const dirty = isCounter && amount !== String(value);
+  const move = (action?: () => void) => {
+    if (!action || busy) return;
+    if (dirty) setPendingAction(() => action);
+    else action();
+  };
+  const adjust = (direction: -1 | 1) => {
+    const base = valid ? parsed : value;
+    setAmount(String(Math.max(0, Math.min(limit, Math.round((base + direction * step) * 100) / 100))));
+    setError("");
+  };
+  async function saveAmount() {
+    if (busy) return;
+    if (isCounter && !valid) {
+      setError(`Informe um valor de 0 a ${limit}${habit.kind === "sleep" ? " (até duas casas decimais)" : " (inteiro)"}.`);
+      return;
+    }
+    setBusy(true);
+    try { await onSave(isCounter ? parsed : value ? 0 : 1); }
+    finally { setBusy(false); }
+  }
   return (
     <div className="habit-detail">
+      <div className="habit-journey" aria-label="Navegação pelos hábitos do dia">
+        <span>Hábito {index + 1} de {total}</span>
+        <div>
+          <button type="button" className="icon-button" aria-label="Hábito anterior" disabled={!onPrevious || busy} onClick={() => move(onPrevious)}><ChevronLeft size={18} /></button>
+          <button type="button" className="icon-button" aria-label="Próximo hábito" disabled={!onNext || busy} onClick={() => move(onNext)}><ChevronRight size={18} /></button>
+        </div>
+      </div>
       <span className={`tag ${categories[habit.category as Category].color}`}>
         {categories[habit.category].label}
       </span>
@@ -713,7 +803,8 @@ export function HabitDetail({
         </span>
       </div>
       {isCounter && (
-        <label>
+        <div className="habit-amount-field">
+          <label htmlFor={amountId}>
           Quantidade (
           {habit.kind === "water"
             ? "ml"
@@ -721,87 +812,66 @@ export function HabitDetail({
               ? "horas"
               : habit.unit || "unidades"}
           )
+          </label>
           <div className="stepper">
             <button
               className="icon-button"
               aria-label="Diminuir quantidade"
-              onClick={() =>
-                setAmount(
-                  Math.max(
-                    0,
-                    amount -
-                      (habit.kind === "water"
-                        ? 250
-                        : habit.kind === "sleep"
-                          ? 0.5
-                          : 1),
-                  ),
-                )
-              }
+              type="button"
+              onClick={() => adjust(-1)}
             >
               <Minus size={18} />
             </button>
             <input
-              type="number"
-              min="0"
-              max={
-                habit.kind === "sleep"
-                  ? 24
-                  : habit.kind === "water"
-                    ? 10000
-                    : 20000
-              }
-              step={habit.kind === "sleep" ? "0.5" : "1"}
+              id={amountId}
+              type="text"
+              inputMode={habit.kind === "sleep" ? "decimal" : "numeric"}
+              autoComplete="off"
+              aria-label="Quantidade registrada"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "habit-value-error" : "habit-value-status"}
               value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => { setAmount(e.target.value); setError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void saveAmount(); } }}
             />
             <button
               className="icon-button"
               aria-label="Aumentar quantidade"
-              onClick={() =>
-                setAmount(
-                  Math.min(
-                    habit.kind === "sleep"
-                      ? 24
-                      : habit.kind === "water"
-                        ? 10000
-                        : 20000,
-                    amount +
-                      (habit.kind === "water"
-                        ? 250
-                        : habit.kind === "sleep"
-                          ? 0.5
-                          : 1),
-                  ),
-                )
-              }
+              type="button"
+              onClick={() => adjust(1)}
             >
               <Plus size={18} />
             </button>
           </div>
-        </label>
+          {error ? <span id="habit-value-error" className="habit-value-error" role="alert">{error}</span> : (
+            <span id="habit-value-status" className={`habit-value-status ${valid && parsed > 0 && parsed < habit.target ? "below-goal" : ""}`}>
+              {!valid ? "Digite um valor válido para salvar." : parsed === 0 ? "Zero remove o registro deste hábito." : parsed < habit.target ? "Meta não atingida. O valor será salvo sem XP." : `Meta atingida. Este hábito vale ${habitXp(habit)} XP.`}
+            </span>
+          )}
+        </div>
       )}
       <div className="detail-actions">
-        <button className="text-button" onClick={onEdit}>
+        <button className="text-button" onClick={() => move(onEdit)}>
           Editar hábito
         </button>
-        <button className="text-button danger-text" onClick={onArchive}>
+        <button className="text-button danger-text" onClick={() => move(onArchive)}>
           <ArchiveRestore size={15} />
           Remover da rotina
         </button>
       </div>
       <div className="modal-actions">
-        <button className="button secondary" onClick={onClose}>
+        <button
+          data-close-dialog
+          className="button secondary"
+          onClick={onClose}
+        >
           Fechar
         </button>
         <button
           className="button primary"
           disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            if (await onSave(isCounter ? amount : value ? 0 : 1)) onClose();
-            setBusy(false);
-          }}
+          onClick={() => void saveAmount()}
         >
           <Check size={16} />
           {busy
@@ -813,6 +883,13 @@ export function HabitDetail({
                 : "Concluir hábito"}
         </button>
       </div>
+      {pendingAction && (
+        <div className="habit-discard" role="group" aria-label="Alterações não salvas">
+          <p>Você alterou o valor sem salvar. Deseja descartar e navegar?</p>
+          <button className="button secondary" onClick={() => setPendingAction(null)}>Continuar editando</button>
+          <button className="button danger" onClick={() => { const action = pendingAction; setPendingAction(null); action(); }}>Descartar e continuar</button>
+        </div>
+      )}
     </div>
   );
 }

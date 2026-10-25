@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { paginateRoutine, routinePageSizes, visibleRoutinePages } from "./routine-pagination";
+import backupLimits from "../shared/backup-limits.json";
+import { usePageDraft } from "./drafts";
+import { AppearanceSettings } from "./Theme";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -10,7 +14,9 @@ import {
   BookOpen,
   Check,
   CheckCheck,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock3,
   Dumbbell,
   Edit3,
@@ -53,6 +59,7 @@ import {
   categories,
   allCompleted,
   isEssential,
+  habitXp,
   dateLabel,
   dayFor,
   downloadBackup,
@@ -63,6 +70,7 @@ import {
 } from "./lib";
 import { CategoryIcon, Empty, Heatmap, Metric, Tag } from "./ui";
 import { MealForm, PasswordForm, SettingsForm, WorkoutForm } from "./forms";
+import { TutorialTrigger } from "./GuidedTutorial";
 export type DialogOptions = {
   title: string;
   description?: string;
@@ -86,11 +94,15 @@ export type PageProps = {
     body: string,
     action: () => Promise<boolean>,
   ) => void;
+  startTutorial: (id: string, trigger: HTMLElement) => void;
+  completedTutorials: string[];
 };
 export function RoutinePage(p: PageProps) {
   const [category, setCategory] = useState("all"),
     [search, setSearch] = useState(""),
-    [archived, setArchived] = useState(false);
+    [archived, setArchived] = useState(false),
+    [pageSize, setPageSize] = useState(10),
+    [page, setPage] = useState(1);
   const habits = p.state.habits
     .filter(
       (h) =>
@@ -99,17 +111,20 @@ export function RoutinePage(p: PageProps) {
         h.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
     )
     .sort((a, b) => a.time.localeCompare(b.time));
+  const pagination = paginateRoutine(habits, page, pageSize);
+  useEffect(() => {
+    setPage((current) => Math.min(current, pagination.totalPages));
+  }, [pagination.totalPages]);
   return (
     <>
-      <div className="page-intro">
+      <div className="page-intro" data-tutorial-target="routine-intro">
         <div>
           <h2>Uma rotina com a sua cara.</h2>
           <p>Comece com o que faz sentido. Ajuste conforme a vida acontece.</p>
         </div>
-        <button className="button primary" onClick={p.addHabit}>
-          <Plus size={17} />
-          Novo hábito
-        </button>
+        <div className="tutorial-actions" data-tutorial-target="routine-create"><TutorialTrigger id="feature-routine" completed={p.completedTutorials.includes("feature-routine")} onStart={p.startTutorial} /><button className="button primary" onClick={p.addHabit}>
+          <Plus size={17} /> Novo hábito
+        </button></div>
       </div>
       <div className="routine-summary">
         <span className="routine-sprout">
@@ -133,11 +148,11 @@ export function RoutinePage(p: PageProps) {
           ))}
         </div>
       </div>
-      <div className="routine-tools">
+      <div className="routine-tools" data-tutorial-target="routine-tools">
         <div className="filter-chips" aria-label="Filtrar área">
           <button
             className={category === "all" ? "selected" : ""}
-            onClick={() => setCategory("all")}
+            onClick={() => { setCategory("all"); setPage(1); }}
           >
             Todas as áreas
           </button>
@@ -145,7 +160,7 @@ export function RoutinePage(p: PageProps) {
             <button
               key={id}
               className={category === id ? "selected" : ""}
-              onClick={() => setCategory(id)}
+              onClick={() => { setCategory(id); setPage(1); }}
             >
               {c.label}
             </button>
@@ -157,23 +172,38 @@ export function RoutinePage(p: PageProps) {
             aria-label="Buscar hábito"
             placeholder="Buscar hábito"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </label>
       </div>
-      <section className="panel routine-list">
+      <section className="panel routine-list" data-tutorial-target="routine-list">
         <div className="section-heading">
           <h3>{archived ? "Hábitos removidos" : "Seus compromissos"}</h3>
           <button
             className="text-button"
-            onClick={() => setArchived(!archived)}
+            onClick={() => { setArchived(!archived); setPage(1); }}
           >
             <ArchiveRestore size={15} />
             {archived ? "Ver hábitos ativos" : "Ver removidos"}
           </button>
         </div>
+        <div className="routine-page-toolbar">
+          <span role="status">
+            {pagination.total ? `Exibindo ${pagination.first}–${pagination.last} de ${pagination.total} hábitos` : "Nenhum hábito nesta seleção"}
+          </span>
+          <label htmlFor="routine-page-size">
+            Itens por página
+            <select
+              id="routine-page-size"
+              value={pageSize}
+              onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}
+            >
+              {routinePageSizes.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+        </div>
         {habits.length ? (
-          habits.map((h) => (
+          pagination.items.map((h) => (
             <div className="routine-row" key={h.id}>
               <span className={`category-tile ${categories[h.category].color}`}>
                 <CategoryIcon category={h.category} />
@@ -193,6 +223,8 @@ export function RoutinePage(p: PageProps) {
                   {h.days.length === 7
                     ? "Todos os dias"
                     : h.days.map((d) => weekdays[d]).join(", ")}
+                  <span>·</span>
+                  {habitXp(h)} XP
                 </div>
               </div>
               <Tag category={h.category} />
@@ -255,6 +287,24 @@ export function RoutinePage(p: PageProps) {
               : "Tente outra busca ou adicione um novo hábito."}
           </Empty>
         )}
+        {pagination.totalPages > 1 && (
+          <nav className="routine-pagination" aria-label="Páginas dos hábitos">
+            <button type="button" className="routine-page-edge" disabled={pagination.page === 1} onClick={() => setPage(pagination.page - 1)}>Anterior</button>
+            <div className="routine-page-numbers">
+              {visibleRoutinePages(pagination.page, pagination.totalPages).map((number) => (
+                <button
+                  type="button"
+                  key={number}
+                  aria-label={`Página ${number}`}
+                  aria-current={number === pagination.page ? "page" : undefined}
+                  onClick={() => setPage(number)}
+                >{number}</button>
+              ))}
+            </div>
+            <span className="routine-page-position">Página {pagination.page} de {pagination.totalPages}</span>
+            <button type="button" className="routine-page-edge" disabled={pagination.page === pagination.totalPages} onClick={() => setPage(pagination.page + 1)}>Próxima</button>
+          </nav>
+        )}
       </section>
       <div className="soft-note">
         <Heart size={17} />
@@ -270,6 +320,21 @@ export function ProgressPage(p: PageProps) {
   const [period, setPeriod] = useState(30);
   const s = p.state,
     day = dayFor(s, p.date);
+  const weightInput = useRef<HTMLInputElement>(null);
+  const [weightValue, setWeightValue] = useState(
+    day.weight === null ? "" : String(day.weight),
+  );
+  useEffect(() => {
+    setWeightValue(day.weight === null ? "" : String(day.weight));
+  }, [p.date, day.weight]);
+  const adjustWeight = (direction: 1 | -1) => {
+    const input = weightInput.current;
+    if (!input) return;
+    if (direction > 0) input.stepUp();
+    else input.stepDown();
+    setWeightValue(input.value);
+  };
+  const weightNumber = Number(weightValue);
   const history = Object.entries(s.days)
     .filter(([, d]) => d.weight !== null)
     .sort(([a], [b]) => a.localeCompare(b));
@@ -324,7 +389,7 @@ export function ProgressPage(p: PageProps) {
   ];
   return (
     <>
-      <div className="page-intro">
+      <div className="page-intro" data-tutorial-target="evolution-periods">
         <div>
           <h2>Veja o quanto você já caminhou.</h2>
           <p>O progresso aparece nos detalhes que se repetem.</p>
@@ -382,12 +447,12 @@ export function ProgressPage(p: PageProps) {
               <small> XP</small>
             </>
           }
-          detail="10 XP por hábito concluído"
+          detail="XP por esforço e bônus de dias completos"
           color="blue"
         />
       </div>
       <div className="progress-columns">
-        <section className="panel weight-chart-panel">
+        <section className="panel weight-chart-panel" data-tutorial-target="evolution-chart">
           <div className="section-heading">
             <div>
               <h3>Mais saúde, passo a passo</h3>
@@ -420,36 +485,38 @@ export function ProgressPage(p: PageProps) {
                   <CartesianGrid
                     strokeDasharray="3 5"
                     vertical={false}
-                    stroke="#e8ece9"
+                    stroke="var(--chart-grid)"
                   />
                   <XAxis
                     dataKey="label"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 11, fill: "#78847d" }}
+                    tick={{ fontSize: 11, fill: "var(--muted)" }}
                     minTickGap={35}
                   />
                   <YAxis
                     domain={["dataMin - 1", "dataMax + 1"]}
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 11, fill: "#78847d" }}
+                    tick={{ fontSize: 11, fill: "var(--muted)" }}
                     tickFormatter={(v) => number(v, 1)}
                   />
                   <Tooltip
                     formatter={(v) => [`${number(Number(v), 1)} kg`, "Peso"]}
                     contentStyle={{
                       borderRadius: 12,
-                      border: "1px solid #e6eae7",
+                      border: "1px solid var(--border)",
+                      background: "var(--surface)",
+                      color: "var(--text)",
                       fontSize: 12,
                     }}
                   />
                   <Line
                     type="monotone"
                     dataKey="weight"
-                    stroke="#397a65"
+                    stroke="var(--chart-line)"
                     strokeWidth={3}
-                    dot={{ r: 4, fill: "#fff", strokeWidth: 2 }}
+                    dot={{ r: 4, fill: "var(--surface)", strokeWidth: 2 }}
                     activeDot={{ r: 6 }}
                     isAnimationActive={false}
                   />
@@ -466,7 +533,8 @@ export function ProgressPage(p: PageProps) {
             </Empty>
           )}
         </section>
-        <section className="panel weight-register">
+        <section className="panel weight-register" data-tutorial-target="weight-register">
+          <TutorialTrigger id="feature-weight" completed={p.completedTutorials.includes("feature-weight")} onStart={p.startTutorial} />
           <span className="category-tile green">
             <Weight size={21} />
           </span>
@@ -492,16 +560,36 @@ export function ProgressPage(p: PageProps) {
               Peso em {p.date === p.today ? "hoje" : dateLabel(p.date)}
               <div className="input-unit">
                 <input
+                  ref={weightInput}
                   type="number"
                   name="weight"
                   min="30"
                   max="350"
                   step="0.1"
                   placeholder="96,0"
-                  defaultValue={day.weight ?? ""}
+                  value={weightValue}
+                  onChange={(event) => setWeightValue(event.currentTarget.value)}
                   required
                 />
-                <span>kg</span>
+                <span className="input-unit-label">kg</span>
+                <div className="input-unit-stepper" role="group" aria-label="Ajustar peso em passos de 0,1 kg">
+                  <button
+                    type="button"
+                    aria-label="Aumentar peso em 0,1 kg"
+                    disabled={p.busy || (weightValue !== "" && weightNumber >= 350)}
+                    onClick={() => adjustWeight(1)}
+                  >
+                    <ChevronUp aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Diminuir peso em 0,1 kg"
+                    disabled={p.busy || (weightValue !== "" && weightNumber <= 30)}
+                    onClick={() => adjustWeight(-1)}
+                  >
+                    <ChevronDown aria-hidden="true" />
+                  </button>
+                </div>
               </div>
             </label>
             <button className="button primary" disabled={p.busy}>
@@ -604,6 +692,7 @@ function WorkoutSession({
   );
   const [busy, setBusy] = useState(false);
   const allSets = record.exercises.flatMap((e) => e.sets);
+  const [reopen, setReopen] = useState(false);
   const setCount = allSets.filter((s) => s.done).length;
   const update = (
     id: string,
@@ -623,12 +712,17 @@ function WorkoutSession({
           : e,
       ),
     }));
-  async function save(complete: boolean) {
+  async function save(complete: boolean, forceReopen = false) {
     setBusy(true);
     if (
       await mutate(
         `/api/day/${date}`,
-        { workout: { ...record, completed: complete } },
+        {
+          workout: {
+            ...record,
+            completed: !forceReopen && (complete || record.completed),
+          },
+        },
         "PATCH",
       )
     )
@@ -703,9 +797,9 @@ function WorkoutSession({
         <button
           className="button secondary"
           disabled={busy}
-          onClick={() => save(false)}
+          onClick={() => (record.completed ? setReopen(true) : save(false))}
         >
-          Salvar progresso
+          {record.completed ? "Reabrir treino" : "Salvar progresso"}
         </button>
         <button
           className="button primary"
@@ -713,9 +807,42 @@ function WorkoutSession({
           onClick={() => save(true)}
         >
           <Check size={16} />
-          {busy ? "Salvando…" : "Concluir treino"}
+          {busy
+            ? "Salvando…"
+            : record.completed
+              ? "Salvar alterações"
+              : "Concluir treino"}
         </button>
       </div>
+      {reopen && (
+        <div
+          className="workout-reopen"
+          role="region"
+          aria-label="Confirmar reabertura"
+        >
+          <strong>Reabrir este treino?</strong>
+          <p>
+            Ao salvar como em andamento, o hábito de treino deste dia será
+            desmarcado e seus pontos de conclusão serão retirados. Cargas e
+            séries serão preservadas.
+          </p>
+          <div className="modal-actions">
+            <button
+              className="button secondary"
+              onClick={() => setReopen(false)}
+            >
+              Manter concluído
+            </button>
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={() => save(false, true)}
+            >
+              Reabrir e salvar
+            </button>
+          </div>
+        </div>
+      )}
       <p className="field-help">
         Você pode concluir com menos séries: respeite sua recuperação. Concluir
         também marca o hábito de treino, quando agendado.
@@ -724,9 +851,12 @@ function WorkoutSession({
   );
 }
 export function TrainingPage(p: PageProps) {
+  const [sessionPage, setSessionPage] = useState(0);
   const sessions = Object.entries(p.state.days)
-    .filter(([, d]) => d.workout?.completed)
+    .filter(([, d]) => d.workout)
     .sort(([a], [b]) => b.localeCompare(a));
+  const lastSessionPage = Math.max(0, Math.ceil(sessions.length / 12) - 1);
+  const visibleSessionPage = Math.min(sessionPage, lastSessionPage);
   const todayWorkout = dayFor(p.state, p.date).workout;
   function edit(workout?: Workout) {
     p.dialog({
@@ -770,17 +900,14 @@ export function TrainingPage(p: PageProps) {
   }
   return (
     <>
-      <div className="page-intro">
+      <div className="page-intro" data-tutorial-target="training-intro">
         <div>
           <h2>Mais forte para a vida.</h2>
           <p>
             Treine com intenção. Registre o esforço. Respeite a recuperação.
           </p>
         </div>
-        <button className="button primary" onClick={() => edit()}>
-          <Plus size={16} />
-          Novo treino
-        </button>
+        <div className="tutorial-actions" data-tutorial-target="training-create"><TutorialTrigger id="feature-workout" completed={p.completedTutorials.includes("feature-workout")} onStart={p.startTutorial} /><button className="button primary" onClick={() => edit()}><Plus size={16} /> Novo treino</button></div>
       </div>
       <div className="training-banner">
         <div className="training-illustration">
@@ -796,11 +923,13 @@ export function TrainingPage(p: PageProps) {
           </p>
         </div>
         <div className="training-banner-stat">
-          <strong>{sessions.length}</strong>
+          <strong>
+            {sessions.filter(([, d]) => d.workout?.completed).length}
+          </strong>
           <span>treinos concluídos</span>
         </div>
       </div>
-      <div className="workout-grid">
+      <div className="workout-grid" data-tutorial-target="training-list">
         {p.state.workouts.map((w, i) => (
           <section key={w.id} className="panel workout-card">
             <div className="workout-card-top">
@@ -875,22 +1004,38 @@ export function TrainingPage(p: PageProps) {
           Adicione exercícios, séries e repetições para montar seu plano.
         </Empty>
       )}
-      <section className="panel recent-sessions">
+      <section className="panel recent-sessions" data-tutorial-target="training-history">
         <div className="section-heading">
           <h3>Seu histórico de treinos</h3>
-          <span className="muted">{sessions.length} sessões</span>
+          <span className="muted">
+            {sessions.length} {sessions.length === 1 ? "sessão" : "sessões"}
+          </span>
         </div>
         {sessions.length ? (
-          sessions.slice(0, 12).map(([key, d]) => (
-            <button
-              key={key}
-              className="session-history-row"
-              onClick={() => {
-                p.setDate(key);
-                const w = p.state.workouts.find(
-                  (v) => v.id === d.workout?.templateId,
-                );
-                if (w)
+          sessions
+            .slice(visibleSessionPage * 12, (visibleSessionPage + 1) * 12)
+            .map(([key, d]) => (
+              <button
+                key={key}
+                className="session-history-row"
+                onClick={() => {
+                  p.setDate(key);
+                  const currentTemplate = p.state.workouts.find(
+                    (v) => v.id === d.workout?.templateId,
+                  );
+                  // Reconstruct the record's own structure, even if its original template was removed.
+                  const w: Workout = {
+                    id: d.workout!.templateId,
+                    name: d.workout!.name,
+                    focus: currentTemplate?.focus ?? "",
+                    notes: currentTemplate?.notes ?? "",
+                    exercises: d.workout!.exercises.map((e) => ({
+                      id: e.id,
+                      name: e.name,
+                      sets: e.sets.length,
+                      reps: "",
+                    })),
+                  };
                   p.dialog({
                     title: `${d.workout?.name} · ${dateLabel(key)}`,
                     wide: true,
@@ -904,54 +1049,67 @@ export function TrainingPage(p: PageProps) {
                       />
                     ),
                   });
-                else
-                  p.dialog({
-                    title: d.workout!.name,
-                    description: dateLabel(key),
-                    children: (
-                      <div className="stack-form">
-                        {d.workout!.exercises.map((e) => (
-                          <div key={e.id}>
-                            <h3>{e.name}</h3>
-                            <p>
-                              {e.sets.filter((s) => s.done).length} séries
-                              concluídas
-                            </p>
-                            <p className="muted">
-                              {e.sets
-                                .filter((s) => s.done)
-                                .map(
-                                  (s) =>
-                                    `${s.weight} kg · ${s.reps || "reps não informadas"}`,
-                                )
-                                .join(" / ")}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    ),
-                  });
-              }}
-            >
-              <span className="history-icon">
-                <Check size={17} />
-              </span>
-              <strong>{d.workout?.name}</strong>
-              <span>{dateLabel(key)}</span>
-              <small>
-                {d.workout?.exercises.reduce(
-                  (n, e) => n + e.sets.filter((s) => s.done).length,
-                  0,
-                )}{" "}
-                séries
-              </small>
-              <ChevronRight size={17} />
-            </button>
-          ))
+                }}
+              >
+                <span
+                  className={`history-icon ${d.workout?.completed ? "" : "partial"}`}
+                >
+                  {d.workout?.completed ? (
+                    <Check size={17} />
+                  ) : (
+                    <Clock3 size={17} />
+                  )}
+                </span>
+                <strong>
+                  {d.workout?.name}
+                  <span className="session-state">
+                    {d.workout?.completed ? "Concluído" : "Em andamento"}
+                  </span>
+                </strong>
+                <span>{dateLabel(key)}</span>
+                <small>
+                  {d.workout?.exercises.reduce(
+                    (n, e) => n + e.sets.filter((s) => s.done).length,
+                    0,
+                  )}{" "}
+                  {d.workout?.exercises.reduce(
+                    (n, e) => n + e.sets.filter((s) => s.done).length,
+                    0,
+                  ) === 1
+                    ? "série"
+                    : "séries"}
+                </small>
+                <ChevronRight size={17} />
+              </button>
+            ))
         ) : (
           <p className="empty-inline">
-            Sua primeira sessão concluída vai aparecer aqui.
+            As sessões salvas, parciais ou concluídas, vão aparecer aqui.
           </p>
+        )}
+        {sessions.length > 12 && (
+          <nav
+            className="session-pagination"
+            aria-label="Paginação do histórico de treinos"
+          >
+            <button
+              className="button secondary compact"
+              disabled={visibleSessionPage === 0}
+              onClick={() => setSessionPage(visibleSessionPage - 1)}
+            >
+              Mais recentes
+            </button>
+            <span>
+              Página {visibleSessionPage + 1} de {lastSessionPage + 1}
+            </span>
+            <button
+              className="button secondary compact"
+              disabled={visibleSessionPage === lastSessionPage}
+              onClick={() => setSessionPage(visibleSessionPage + 1)}
+            >
+              Mais antigos
+            </button>
+          </nav>
         )}
       </section>
       <div className="soft-note">
@@ -982,7 +1140,7 @@ export function FoodPage(p: PageProps) {
   }
   return (
     <>
-      <div className="page-intro">
+      <div className="page-intro" data-tutorial-target="food-overview">
         <div>
           <h2>Comer bem cabe na vida real.</h2>
           <p>
@@ -990,10 +1148,7 @@ export function FoodPage(p: PageProps) {
             preferências.
           </p>
         </div>
-        <button className="button primary" onClick={() => edit()}>
-          <Plus size={16} />
-          Nova refeição
-        </button>
+        <div className="tutorial-actions" data-tutorial-target="food-create"><TutorialTrigger id="feature-meal" completed={p.completedTutorials.includes("feature-meal")} onStart={p.startTutorial} /><button className="button primary" onClick={() => edit()}><Plus size={16} /> Nova refeição</button></div>
       </div>
       <div className="nutrition-overview">
         <div className="nutrition-intro">
@@ -1035,7 +1190,7 @@ export function FoodPage(p: PageProps) {
         </div>
       </div>
       <div className="food-layout">
-        <div className="meal-list">
+        <div className="meal-list" data-tutorial-target="food-list">
           {meals.map((m, i) => (
             <section className="panel meal-card" key={m.id}>
               <div className="meal-time">
@@ -1140,19 +1295,7 @@ export function JournalPage(p: PageProps) {
   const d = dayFor(p.state, p.date);
   const [mood, setMood] = useState(d.mood);
   const [dirty, setDirty] = useState(false);
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent("journal-dirty", { detail: dirty }));
-    const warn = (e: BeforeUnloadEvent) => {
-      if (dirty) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => {
-      window.removeEventListener("beforeunload", warn);
-      window.dispatchEvent(new CustomEvent("journal-dirty", { detail: false }));
-    };
-  }, [dirty]);
+  usePageDraft(dirty);
   const saved = !!(d.journal || d.win || d.next || d.mood);
   const entries = Object.entries(p.state.days)
     .filter(([, day]) => day.journal || day.win || day.next || day.mood)
@@ -1172,8 +1315,9 @@ export function JournalPage(p: PageProps) {
         </span>
       </div>
       <div className="journal-layout">
-        <section className="panel journal-editor">
+        <section className="panel journal-editor" data-tutorial-target="journal-editor">
           <div className="journal-date">
+            <TutorialTrigger id="feature-journal" completed={p.completedTutorials.includes("feature-journal")} onStart={p.startTutorial} />
             <span className="category-tile purple">
               <BookOpen size={22} />
             </span>
@@ -1295,7 +1439,7 @@ export function JournalPage(p: PageProps) {
             <h3>Você não precisa dar conta de tudo para estar progredindo.</h3>
             <Sprout size={30} strokeWidth={1.2} />
           </div>
-          <section className="panel journal-history">
+          <section className="panel journal-history" data-tutorial-target="journal-history">
             <h3>Seus dias, suas histórias.</h3>
             {entries.length ? (
               entries.slice(0, 12).map(([key, day]) => (
@@ -1351,12 +1495,12 @@ export function JournalPage(p: PageProps) {
 export function SettingsPage(p: PageProps) {
   const file = useRef<HTMLInputElement>(null);
   async function importFile(f: File) {
-    if (f.size > 5 * 1024 * 1024) {
+    if (f.size > backupLimits.maxImportBytes) {
       p.dialog({
         title: "Arquivo muito grande",
         children: (
           <p className="dialog-body">
-            Escolha um backup do Ritmo com até 5 MB.
+            Escolha um backup do Ritmo com até {backupLimits.maxImportLabel}.
           </p>
         ),
       });
@@ -1389,7 +1533,7 @@ export function SettingsPage(p: PageProps) {
         </div>
       </div>
       <div className="settings-layout">
-        <section className="panel settings-form">
+        <section className="panel settings-form" data-tutorial-target="settings-form">
           <div className="section-heading">
             <div>
               <h3>Perfil e metas</h3>
@@ -1400,7 +1544,9 @@ export function SettingsPage(p: PageProps) {
           <SettingsForm settings={p.state.settings} mutate={p.mutate} />
         </section>
         <aside className="settings-aside">
-          <section className="panel backup-card">
+          <AppearanceSettings />
+          <section className="panel backup-card" data-tutorial-target="settings-backup">
+            <TutorialTrigger id="feature-backup" completed={p.completedTutorials.includes("feature-backup")} onStart={p.startTutorial} />
             <span className="category-tile blue">
               <ShieldCheck size={22} />
             </span>
@@ -1531,7 +1677,7 @@ export function WelcomePanel({ onClose }: { onClose: () => void }) {
       <div className="welcome-steps">
         <div>
           <Check size={16} />
-          <span>Conclua hábitos e ganhe 10 XP por vitória.</span>
+          <span>Hábitos rendem 10, 20 ou 30 XP conforme o esforço.</span>
         </div>
         <div>
           <DropletsIcon />

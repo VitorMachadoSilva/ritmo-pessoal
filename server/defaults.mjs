@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import essentialIds from "../shared/essential-habits.json" with { type: "json" };
+import { createCognitiveGamesState } from "./cognitive-games.mjs";
 
 export const dateKey = (tz = "America/Sao_Paulo") =>
   new Intl.DateTimeFormat("en-CA", {
@@ -44,6 +45,7 @@ export function initialState(name) {
     version: 1,
     focus: null,
     weeks: {},
+    cognitiveGames: createCognitiveGamesState(),
     settings: {
       name,
       startDate: start,

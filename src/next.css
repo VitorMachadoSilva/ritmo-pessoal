@@ -1,3 +1,73 @@
+.discard-modal h2 {
+  margin: 0 0 14px;
+  font-size: 21px;
+}
+.discard-modal p {
+  color: #65726d;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.discard-modal .modal-actions {
+  margin-top: 24px;
+}
+.discard-modal {
+  z-index: 90;
+  animation: discard-appear 0.16s ease-out;
+}
+.discard-overlay {
+  z-index: 80;
+  background: rgba(24, 50, 39, 0.24);
+  backdrop-filter: blur(1px);
+}
+.session-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid #e4e9e4;
+  margin-top: 10px;
+}
+.session-pagination > span {
+  color: #65726d;
+  font-size: 12px;
+}
+.session-state {
+  display: block;
+  margin-top: 5px;
+  color: #65726d;
+  font-size: 11px;
+  font-weight: 400;
+}
+.history-icon.partial {
+  color: #77638d;
+  background: #eeebf7;
+}
+.workout-reopen {
+  padding: 18px;
+  background: #f2f5ec;
+  border: 1px solid #dce6d6;
+  border-radius: 12px;
+  margin-top: 16px;
+}
+.workout-reopen p {
+  color: #52665d;
+  line-height: 1.7;
+  font-size: 13px;
+}
+@keyframes discard-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .discard-modal {
+    animation: none;
+  }
+}
 .day-mode {
   display: flex;
   align-items: center;

@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { initialState, dateKey } from "../server/defaults.mjs";
+import { DatabaseSync } from "node:sqlite";
 
 const dir = mkdtempSync(path.join(tmpdir(), "ritmo-test-"));
 const port = 24318;
@@ -84,6 +85,12 @@ test("private application: onboarding, sessions, history, backup, validation and
       assert.equal(r.status, 201);
       assert.match(r.cookie, /HttpOnly/i);
       assert.match(r.cookie, /SameSite=Strict/i);
+      assert.doesNotMatch(r.cookie, /Max-Age|Expires=/i);
+      const sessionDb = new DatabaseSync(path.join(dir, "test.sqlite"));
+      const expiry = sessionDb.prepare("SELECT expires FROM sessions").get().expires;
+      sessionDb.close();
+      assert.ok(expiry - Date.now() > 11 * 3600000);
+      assert.ok(expiry - Date.now() <= 12 * 3600000);
       assert.equal(
         (
           await req("/api/setup", {
@@ -115,6 +122,10 @@ test("private application: onboarding, sessions, history, backup, validation and
       assert.equal(r.data.days[today].water, 750);
       assert.equal(r.data.days[today].sleep, 8);
       assert.equal(r.data.days[today].weight, 95.8);
+      r = await req(`/api/day/${today}`, { sleep: 6.5 }, "PATCH");
+      assert.equal(r.status, 200);
+      assert.equal(r.data.days[today].sleep, 6.5);
+      assert.equal((await req("/api/state")).data.days[today].sleep, 6.5);
       await req(`/api/day/${today}`, { waterDelta: -10000 }, "PATCH");
       assert.equal((await req("/api/state")).data.days[today].water, 0);
     },
@@ -182,16 +193,18 @@ test("private application: onboarding, sessions, history, backup, validation and
         kind: "counter",
         target: 10,
         unit: "páginas",
+        difficulty: "challenging",
       });
       assert.equal(r.status, 201);
       const h = r.data.habits.at(-1);
+      assert.equal(h.difficulty, "challenging");
       await req(`/api/day/${today}`, { habitId: h.id, value: 12 }, "PATCH");
       r = await req("/api/state");
       assert.equal(r.data.days[today].entries[h.id], 12);
       const wake = r.data.habits.find((h) => h.id === "wake");
       r = await req(
         "/api/habits/wake",
-        { ...wake, title: "Acordar renovado" },
+        { ...wake, title: "Acordar renovado", difficulty: "moderate" },
         "PUT",
       );
       assert.equal(
@@ -202,6 +215,9 @@ test("private application: onboarding, sessions, history, backup, validation and
         r.data.days[yesterday].habits.find((h) => h.id === "wake").title,
         "Acordar no mesmo horário",
       );
+      assert.equal(r.data.days[today].habits.find((habit) => habit.id === "wake").difficulty, "moderate");
+      assert.equal(r.data.days[yesterday].habits.find((habit) => habit.id === "wake").difficulty, undefined);
+      assert.equal((await req("/api/habits/wake", { ...wake, difficulty: "impossible" }, "PUT")).status, 400);
       await req(`/api/habits/${h.id}`, { ...h, archived: true }, "PUT");
       r = await req("/api/state");
       assert.equal(
@@ -333,19 +349,23 @@ test("private application: onboarding, sessions, history, backup, validation and
         minutes: 25,
       });
       assert.equal(start.status, 201);
+      const sessionId = start.data.focus.id;
       assert.ok(start.data.focus.resumedAt);
       assert.equal(
         (await req("/api/focus/start", { label: "Outra", minutes: 25 })).status,
         409,
       );
-      assert.equal((await req("/api/focus/finish", {})).status, 400);
+      assert.equal((await req("/api/focus/finish", { sessionId })).status, 400);
       assert.equal(
-        (await req("/api/focus/pause", {})).data.focus.resumedAt,
+        (await req("/api/focus/pause", { sessionId })).data.focus.resumedAt,
         null,
       );
-      assert.equal((await req("/api/focus/pause", {})).status, 409);
-      assert.equal((await req("/api/focus/resume", {})).status, 200);
-      assert.equal((await req("/api/focus/cancel", {})).data.focus, null);
+      assert.equal((await req("/api/focus/pause", { sessionId })).status, 409);
+      assert.equal((await req("/api/focus/resume", { sessionId })).status, 200);
+      assert.equal(
+        (await req("/api/focus/cancel", { sessionId })).data.focus,
+        null,
+      );
       assert.equal((await req("/api/focus/finish", {})).status, 409);
     },
   );
@@ -368,7 +388,9 @@ test("private application: onboarding, sessions, history, backup, validation and
         habitId: habit.id,
       };
       assert.equal((await req("/api/import", state)).status, 200);
-      const result = await req("/api/focus/finish", {});
+      const result = await req("/api/focus/finish", {
+        sessionId: "finished-test",
+      });
       assert.equal(result.status, 200);
       assert.equal(result.data.focus, null);
       assert.equal(result.data.days[today].entries[habit.id], habit.target);
@@ -442,7 +464,9 @@ test("private application: onboarding, sessions, history, backup, validation and
         habitId: habit.id,
       };
       await req("/api/import", state);
-      const result = await req("/api/focus/finish", {});
+      const result = await req("/api/focus/finish", {
+        sessionId: "partial-test",
+      });
       assert.equal(result.status, 200);
       assert.equal(result.data.days[today].entries[habit.id], 0);
       assert.equal(
@@ -527,6 +551,36 @@ test("private application: onboarding, sessions, history, backup, validation and
       );
     },
   );
+  await t.test("remember me is explicit, expires server-side, and rejects malformed values", async () => {
+    await req("/api/logout", {});
+    assert.equal((await req("/api/login", {
+      username: "tester",
+      password: "new-test-passphrase-2026",
+      remember: "yes",
+    })).status, 400);
+    const remembered = await req("/api/login", {
+      username: "tester",
+      password: "new-test-passphrase-2026",
+      remember: true,
+    });
+    assert.equal(remembered.status, 200);
+    assert.match(remembered.cookie, /Max-Age=604800/i);
+    assert.match(remembered.cookie, /HttpOnly/i);
+    assert.match(remembered.cookie, /SameSite=Strict/i);
+    const sessionDb = new DatabaseSync(path.join(dir, "test.sqlite"));
+    const newest = sessionDb.prepare("SELECT hash, expires FROM sessions ORDER BY expires DESC LIMIT 1").get();
+    assert.ok(newest.expires - Date.now() > 6 * 86400000);
+    sessionDb.prepare("UPDATE sessions SET expires=? WHERE hash=?").run(Date.now() - 1, newest.hash);
+    sessionDb.close();
+    assert.equal((await req("/api/state")).status, 401);
+    const ordinary = await req("/api/login", {
+      username: "tester",
+      password: "new-test-passphrase-2026",
+      remember: false,
+    });
+    assert.equal(ordinary.status, 200);
+    assert.doesNotMatch(ordinary.cookie, /Max-Age|Expires=/i);
+  });
 });
 
 test("initial content includes all personal routine areas without fabricated logs", () => {

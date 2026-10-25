@@ -12,6 +12,14 @@ Layout desktop: navegação lateral fixa de 220px; cabeçalho discreto; resumo d
 
 O ponto memorável são os anéis segmentados de progresso diário. Outras visualizações são discretas. Cores expressam categoria/estado. Movimento aparece ao concluir uma atividade e respeita reduced-motion. Nenhuma foto corporal será copiada para o projeto. Dados anteriores não são inventados.
 
+Controles de escolha permanecem `<select>` nativos para manter teclado e tecnologia assistiva. O controle fechado usa superfície do tema, seta fina, borda suave e foco visível; a lista aberta usa `appearance: base-select` progressivamente onde houver suporte, com fallback nativo nos demais navegadores. Em telas estreitas, preserva fonte de 16px para evitar zoom automático do iOS. A mesma linguagem cobre formulários de hábito e ajustes, vínculo do foco, paginação e previews. Barras da página, agenda, heatmap, modal, histórico e menu em viewport baixa usam trilho transparente e indicador fino verde acinzentado, com contraste próprio no escuro. O heatmap mantém rolagem horizontal e o indicador visível; não esconder scrollbars nem substituir semântica de select sem necessidade comprovada. Implementação e evidência: `CONTROLS_REVIEW.md`.
+
+O registro de peso conserva um input numérico digitável e ganha controles de +/− integrados ao campo. Eles respeitam passo de 0,1 kg, limites de 30–350 kg, estados no tema e foco acessível; as setas nativas são ocultadas somente nesse campo para evitar a caixa cinza do navegador. Outros campos numéricos não são afetados.
+
 ## Verificação
+
+A partir da 1.2.0, Claro/Escuro/Sistema são aparências do mesmo produto. O escuro usa canvas #121c19, superfície #1b2823, texto #e3eae4, acento #b6ce9c, lavanda #302d40 e água #233644. Preservar categorias, hierarquia e estrutura. Tokens e adaptações em `src/theme.css`; gráficos devem usar tokens, nunca branco fixo no tooltip. Movimento responde às ações e deve desaparecer em reduced-motion. Detalhes e evidências em `APPEARANCE_REVIEW.md`.
+
+Na entrada 1.3.0, a planta SVG cresce quando os campos são preenchidos e floresce após autenticação. Órbitas, brilho e notas flutuam lentamente, com pausa explícita e suspensão ao ocultar a aba; no celular o movimento contínuo desaparece. A tela escura usa os mesmos tokens do produto. A identidade do split verde musgo e creme permanece; formulário, recuperação e foco comandam a hierarquia. Veja `LOGIN_REVIEW.md`.
 
 Build TypeScript, testes de integração de autenticação e persistência, uso real no navegador, estados vazios, exclusão com confirmação, teclado e telas 1440px e 390px. Contraste, ausência de scroll horizontal, alvos de toque e foco são obrigatórios.

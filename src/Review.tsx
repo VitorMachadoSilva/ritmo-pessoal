@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { usePageDraft } from "./drafts";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,6 +20,7 @@ import {
 } from "./lib";
 import { weeklyReview, weekStart } from "./review-data";
 import { CategoryIcon } from "./ui";
+import { TutorialTrigger } from "./GuidedTutorial";
 export function ReviewPage(p: PageProps) {
   const review = weeklyReview(p.state, p.date, p.today);
   const note = p.state.weeks?.[review.start];
@@ -26,17 +28,7 @@ export function ReviewPage(p: PageProps) {
   const [adjustment, setAdjustment] = useState(note?.adjustment ?? "");
   const [priority, setPriority] = useState(note?.priority ?? "");
   const [dirty, setDirty] = useState(false);
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent("journal-dirty", { detail: dirty }));
-    const warn = (e: BeforeUnloadEvent) => {
-      if (dirty) e.preventDefault();
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => {
-      window.removeEventListener("beforeunload", warn);
-      window.dispatchEvent(new CustomEvent("journal-dirty", { detail: false }));
-    };
-  }, [dirty]);
+  usePageDraft(dirty);
   const changeWeek = (offset: number) =>
     p.setDate(
       offset < 0
@@ -78,7 +70,7 @@ export function ReviewPage(p: PageProps) {
           </button>
         </div>
       </div>
-      <section className="panel review-week">
+      <section className="panel review-week" data-tutorial-target="review-week">
         <div className="section-heading">
           <div>
             <h3>Seu ritmo, dia a dia</h3>
@@ -180,13 +172,14 @@ export function ReviewPage(p: PageProps) {
         </div>
       </div>
       <div className="review-layout">
-        <section className="panel review-notes">
+        <section className="panel review-notes" data-tutorial-target="review-notes">
           <div className="section-heading">
             <div>
               <h3>Leve um aprendizado adiante.</h3>
               <p>Escolha um ajuste pequeno para a próxima semana.</p>
             </div>
             <CalendarCheck2 size={21} />
+            <TutorialTrigger id="feature-review" completed={p.completedTutorials.includes("feature-review")} onStart={p.startTutorial} />
           </div>
           <form
             className="stack-form"
@@ -233,7 +226,7 @@ export function ReviewPage(p: PageProps) {
                 placeholder="Escolha uma mudança que caiba no seu dia."
               />
             </label>
-            <div className="review-save">
+            <div className="review-save" data-tutorial-target="review-save">
               <span role="status">
                 {dirty ? (
                   "Alterações não salvas"
@@ -271,7 +264,7 @@ export function ReviewPage(p: PageProps) {
                 </div>
                 <small>
                   {count
-                    ? `${count} hábitos previstos`
+                    ? `${count} ${count === 1 ? "hábito previsto" : "hábitos previstos"}`
                     : "Sem hábitos previstos"}
                 </small>
               </div>

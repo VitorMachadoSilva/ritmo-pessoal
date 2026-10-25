@@ -17,6 +17,8 @@ if not exist "dist\index.html" (
 )
 echo.
 echo Ritmo pessoal - abra http://localhost:3000 no navegador.
+echo Acesso por outros dispositivos da mesma rede esta habilitado pela flag RITMO_LAN_ACCESS=true.
+echo Use o IP local deste computador, por exemplo http://192.168.0.10:3000.
 echo Mantenha esta janela aberta enquanto estiver usando.
 echo Para encerrar, pressione Ctrl+C.
 echo.

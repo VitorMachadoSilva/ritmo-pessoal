@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { createPortal } from "react-dom";
 import {
   ArrowUpRight,
   Check,
@@ -16,6 +17,7 @@ import {
   Utensils,
   Heart,
   Plus,
+  CalendarDays,
 } from "lucide-react";
 import type { Category, Day, Habit, State } from "./types";
 import {
@@ -25,6 +27,8 @@ import {
   activeHabits,
   dateLabel,
   dayFor,
+  habitValue,
+  habitXp,
   isDone,
   number,
   score,
@@ -101,47 +105,124 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  className = "",
+  draftKey,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  className?: string;
+  draftKey?: string;
 }) {
   const previous = useRef<HTMLElement | null>(
     document.activeElement as HTMLElement,
   );
+  const changed = useRef(false);
+  const [discard, setDiscard] = useState(false);
+  useEffect(() => {
+    changed.current = false;
+    setDiscard(false);
+  }, [draftKey]);
+  const requestClose = () => (changed.current ? setDiscard(true) : onClose());
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (changed.current) event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
   return (
-    <Dialog.Root
-      open
-      onOpenChange={(v) => {
-        if (!v) onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className="modal-overlay" />
-        <Dialog.Content
-          className={`modal ${wide ? "wide" : ""}`}
-          onCloseAutoFocus={(e) => {
-            e.preventDefault();
-            previous.current?.focus();
+    <>
+      <Dialog.Root
+        open
+        onOpenChange={(v) => {
+          if (!v) requestClose();
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="modal-overlay" />
+          <Dialog.Content
+            className={`modal ${wide ? "wide" : ""} ${className}`.trim()}
+            {...(description ? {} : { "aria-describedby": undefined })}
+            onChangeCapture={() => {
+              changed.current = true;
+            }}
+            onClickCapture={(event) => {
+              const target = (event.target as HTMLElement).closest("button");
+              if (
+                target &&
+                (target.hasAttribute("aria-pressed") ||
+                  target.hasAttribute("data-draft-change"))
+              )
+                changed.current = true;
+              // Form cancel buttons use their existing callbacks; guard before they can unmount.
+              if (
+                target?.hasAttribute("data-close-dialog") &&
+                changed.current
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                setDiscard(true);
+              }
+            }}
+            onCloseAutoFocus={(e) => {
+              e.preventDefault();
+              previous.current?.focus();
+            }}
+          >
+            <div className="modal-heading">
+              <div>
+                <Dialog.Title>{title}</Dialog.Title>
+                {description && <Dialog.Description>{description}</Dialog.Description>}
+              </div>
+              <Dialog.Close className="icon-button" aria-label="Fechar janela">
+                <X size={20} />
+              </Dialog.Close>
+            </div>
+            {children}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      {discard && (
+        <Dialog.Root
+          open
+          onOpenChange={(open) => {
+            if (!open) setDiscard(false);
           }}
         >
-          <div className="modal-heading">
-            <div>
-              <Dialog.Title>{title}</Dialog.Title>
+          <Dialog.Portal>
+            <Dialog.Overlay className="modal-overlay discard-overlay" />
+            <Dialog.Content className="modal discard-modal">
+              <Dialog.Title>Descartar alterações?</Dialog.Title>
               <Dialog.Description>
-                {description || "Personalize sua rotina no seu ritmo."}
+                Há alterações nesta janela que ainda não foram salvas. Você pode
+                continuar editando ou descartá-las.
               </Dialog.Description>
-            </div>
-            <Dialog.Close className="icon-button" aria-label="Fechar janela">
-              <X size={20} />
-            </Dialog.Close>
-          </div>
-          {children}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+              <div className="modal-actions">
+                <button
+                  className="button secondary"
+                  onClick={() => setDiscard(false)}
+                  autoFocus
+                >
+                  Continuar editando
+                </button>
+                <button
+                  className="button danger"
+                  onClick={() => {
+                    changed.current = false;
+                    onClose();
+                  }}
+                >
+                  Descartar alterações
+                </button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+    </>
   );
 }
 export function DatePicker({
@@ -155,8 +236,87 @@ export function DatePicker({
   startDate: string;
   onChange: (d: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() => `${date.slice(0, 7)}-01`);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverPosition, setPopoverPosition] = useState<CSSProperties>({ visibility: "hidden" });
+  const monthDate = new Date(`${visibleMonth}T12:00:00`);
+  const firstWeekday = (monthDate.getDay() + 6) % 7;
+  const monthLength = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  const startMonth = `${startDate.slice(0, 7)}-01`;
+  const todayMonth = `${today.slice(0, 7)}-01`;
+  const monthTitle = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(monthDate);
+  const weekdays = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+
+  useEffect(() => {
+    setVisibleMonth(`${date.slice(0, 7)}-01`);
+  }, [date]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const anchor = triggerRef.current?.getBoundingClientRect();
+      const popover = popoverRef.current;
+      if (!anchor || !popover) return;
+      const viewport = window.visualViewport;
+      const viewportLeft = viewport?.offsetLeft ?? 0;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportWidth = viewport?.width ?? window.innerWidth;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const margin = 12;
+      const width = Math.min(286, viewportWidth - margin * 2);
+      const height = popover.offsetHeight;
+      const left = Math.min(
+        Math.max(anchor.left + anchor.width / 2 - width / 2, viewportLeft + margin),
+        viewportLeft + viewportWidth - width - margin,
+      );
+      const below = anchor.bottom + 10;
+      const above = anchor.top - height - 10;
+      const maxTop = viewportTop + viewportHeight - margin - Math.min(height, viewportHeight - margin * 2);
+      const top = below + height <= viewportTop + viewportHeight - margin
+        ? below
+        : Math.max(viewportTop + margin, Math.min(above, maxTop));
+      setPopoverPosition({ position: "fixed", left, top, width, maxHeight: viewportHeight - margin * 2, overflowY: "auto", transform: "none", visibility: "visible" });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    window.visualViewport?.addEventListener("resize", updatePosition);
+    window.visualViewport?.addEventListener("scroll", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.visualViewport?.removeEventListener("resize", updatePosition);
+      window.visualViewport?.removeEventListener("scroll", updatePosition);
+    };
+  }, [open, visibleMonth]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!pickerRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const shiftMonth = (amount: number) => {
+    const next = new Date(monthDate.getFullYear(), monthDate.getMonth() + amount, 1, 12);
+    setVisibleMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`);
+  };
+
   return (
-    <div className="date-picker">
+    <div className="date-picker" ref={pickerRef}>
       <button
         className="icon-button"
         onClick={() => onChange(addDays(date, -1))}
@@ -165,24 +325,12 @@ export function DatePicker({
       >
         <ChevronLeft size={17} />
       </button>
-      <label className="date-label">
-        <span>
-          {date === today
-            ? "Hoje"
-            : dateLabel(date, { day: "2-digit", month: "short" })}
-        </span>
-        <input
-          aria-label="Escolher dia"
-          type="date"
-          value={date}
-          min={startDate}
-          max={today}
-          onChange={(e) => {
-            if (e.target.value >= startDate && e.target.value <= today)
-              onChange(e.target.value);
-          }}
-        />
-      </label>
+      <div className="date-label">
+        <button ref={triggerRef} className="calendar-trigger" type="button" aria-label={`Escolher dia, ${dateLabel(date, { day: "numeric", month: "long", year: "numeric" })}`} aria-expanded={open} aria-haspopup="dialog" aria-controls="ritmo-date-calendar" onClick={() => setOpen((value) => !value)}>
+          <CalendarDays size={14} aria-hidden="true" />
+          <span>{date === today ? "Hoje" : dateLabel(date, { day: "2-digit", month: "short" })}</span>
+        </button>
+      </div>
       <button
         className="icon-button"
         onClick={() => onChange(addDays(date, 1))}
@@ -191,6 +339,29 @@ export function DatePicker({
       >
         <ChevronRight size={17} />
       </button>
+      {open && createPortal(<div ref={popoverRef} className="date-calendar-popover" style={popoverPosition} id="ritmo-date-calendar" role="dialog" aria-label="Escolher data">
+          <div className="date-calendar-heading">
+            <strong>{monthTitle}</strong>
+            <div>
+              <button type="button" className="date-calendar-nav" aria-label="Mês anterior" disabled={visibleMonth <= startMonth} onClick={() => shiftMonth(-1)}><ChevronLeft size={16} /></button>
+              <button type="button" className="date-calendar-nav" aria-label="Próximo mês" disabled={visibleMonth >= todayMonth} onClick={() => shiftMonth(1)}><ChevronRight size={16} /></button>
+            </div>
+          </div>
+          <div className="date-calendar-grid" role="grid" aria-label={monthTitle}>
+            {weekdays.map((day) => <span className="date-calendar-weekday" role="columnheader" key={day}>{day}</span>)}
+            {Array.from({ length: 42 }, (_, index) => {
+              const day = index - firstWeekday + 1;
+              if (day < 1 || day > monthLength) return <span className="date-calendar-empty" role="gridcell" key={`empty-${index}`} />;
+              const value = `${visibleMonth.slice(0, 7)}-${String(day).padStart(2, "0")}`;
+              const disabled = value < startDate || value > today;
+              return <button type="button" role="gridcell" key={value} className={`date-calendar-day${value === date ? " is-selected" : ""}${value === today ? " is-today" : ""}`} aria-label={dateLabel(value, { day: "numeric", month: "long", year: "numeric" })} aria-selected={value === date} disabled={disabled} onClick={() => { onChange(value); setOpen(false); }}>{day}</button>;
+            })}
+          </div>
+          <div className="date-calendar-footer">
+            <span>Selecione um dia</span>
+            <button type="button" disabled={today < startDate || date === today} onClick={() => { onChange(today); setOpen(false); }}>Hoje</button>
+          </div>
+        </div>, document.body)}
     </div>
   );
 }
@@ -198,6 +369,39 @@ export function ProgressOrbit({ day }: { day: Day }) {
   const p = score(day),
     done = completed(day),
     total = activeHabits(day).length;
+  const [animated, setAnimated] = useState(p);
+  const current = useRef(p);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.hidden) {
+      current.current = p;
+      setAnimated(p);
+      return;
+    }
+    const from = current.current;
+    if (from === p) return;
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const elapsed = Math.min(1, (now - start) / 650);
+      const eased = 1 - Math.pow(1 - elapsed, 3);
+      current.current = from + (p - from) * eased;
+      setAnimated(current.current);
+      if (elapsed < 1) frame = requestAnimationFrame(tick);
+    };
+    const onVisibility = () => {
+      if (!document.hidden) return;
+      cancelAnimationFrame(frame);
+      current.current = p;
+      setAnimated(p);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [p]);
+  const visiblePercent = Math.round(animated);
   return (
     <div
       className="orbit"
@@ -231,7 +435,7 @@ export function ProgressOrbit({ day }: { day: Day }) {
               key={i}
               d={`M${120 + r * Math.cos(a)},${120 + r * Math.sin(a)} A${r},${r} 0 0 1 ${120 + r * Math.cos(b)},${120 + r * Math.sin(b)}`}
               fill="none"
-              stroke={i < Math.round(p / 2.5) ? "#e0ecb3" : "#52756a"}
+              stroke={i < Math.round(animated / 2.5) ? "#e0ecb3" : "#52756a"}
               strokeWidth="16"
               strokeLinecap="butt"
             />
@@ -251,7 +455,7 @@ export function ProgressOrbit({ day }: { day: Day }) {
       </svg>
       <div className="orbit-value">
         <strong>
-          {p}
+          {visiblePercent}
           <span>%</span>
         </strong>
         <span>do seu dia</span>
@@ -279,25 +483,29 @@ export function HabitRow({
   status?: string;
 }) {
   const done = isDone(habit, day);
+  const partial = habit.kind !== "check" && habitValue(habit, day) > 0 && !done;
   const amount =
     habit.kind === "water"
       ? `${number(day.water / 1000, 2)} / ${number(habit.target / 1000, 1)} L`
       : habit.kind === "sleep"
-        ? `${number(day.sleep ?? 0, 1)} / ${habit.target} h`
+        ? `${number(day.sleep ?? 0, 2)} / ${habit.target} h`
         : habit.kind === "counter"
           ? `${day.entries[habit.id] ?? 0} / ${habit.target} ${habit.unit}`
           : null;
   return (
-    <div className={`habit-row ${done ? "is-done" : ""}`}>
+    <div className={`habit-row ${done ? "is-done" : ""} ${partial ? "is-partial" : ""}`}>
       <button
         className={`habit-check ${done ? "checked" : ""}`}
         onClick={onToggle}
         disabled={busy}
-        aria-label={`${done ? "Desmarcar" : "Registrar"} ${habit.title}`}
+        data-pending-disabled={busy || undefined}
+        aria-label={`${habit.kind === "check" ? done ? "Desmarcar" : "Concluir" : partial ? "Revisar meta não atingida de" : "Abrir registro de"} ${habit.title}`}
         aria-pressed={done}
       >
         {done ? (
           <Check size={15} />
+        ) : partial ? (
+          <X size={14} />
         ) : habit.kind === "check" ? null : habit.kind === "water" ? (
           <Droplets size={14} />
         ) : habit.kind === "sleep" ? (
@@ -313,16 +521,16 @@ export function HabitRow({
       <div className="habit-meta">
         <Tag category={habit.category} />
         {amount ? (
-          <span className="habit-amount">{amount}</span>
+          <span className="habit-amount-wrap"><span className="habit-amount">{amount}</span>{partial && <span className="habit-partial">Meta não atingida · 0 XP</span>}</span>
         ) : (
           <span className="habit-xp">
             {done ? (
               <>
                 <Check size={11} />
-                +10 XP
+                +{habitXp(habit)} XP
               </>
             ) : (
-              status || "10 XP"
+              status || `${habitXp(habit)} XP`
             )}
           </span>
         )}
@@ -530,10 +738,10 @@ export function ArrowLink({
     </button>
   );
 }
-export function Celebration({ visible }: { visible: boolean }) {
+export function Celebration({ visible, points = 10 }: { visible: boolean; points?: number }) {
   return visible ? (
     <span className="xp-pop">
-      <Sparkles size={14} /> +10 XP
+      <Sparkles size={14} /> +{points} XP
     </span>
   ) : null;
 }

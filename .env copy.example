@@ -1,5 +1,7 @@
 PORT=3000
 HOST=127.0.0.1
+# Feature flag para acesso por dispositivos na mesma rede local.
+RITMO_LAN_ACCESS=true
 # Ative apenas quando acessar por HTTPS em uma hospedagem configurada:
 RITMO_HTTPS=0
 # Caminho opcional para um disco persistente:

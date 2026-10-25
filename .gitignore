@@ -12,3 +12,4 @@ data/
 output/
 backups/
 .playwright-cli/
+.playwright-mcp/

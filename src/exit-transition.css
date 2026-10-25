@@ -1,0 +1,59 @@
+/* Choreography: cards retreat over 720ms; circle 850ms; logo/plant settle by
+   1800ms; quiet pause until the 3000ms undo deadline in exit-sequence.ts. */
+.exit-departure { animation: exit-room 900ms ease both; transform-origin: center 40%; pointer-events: none; }
+.exit-departure :is(.sidebar,.topbar,.page-heading,.overview-top,.day-mode,.rhythm-shortcuts,.metrics-strip,.dashboard-columns,.heatmap-panel) { animation: exit-card 300ms ease both; animation-delay: calc(var(--exit-order, 0) * var(--entry-stagger)); }
+.exit-departure .heatmap-panel { --exit-order: 0; }
+.exit-departure .dashboard-columns { --exit-order: 1; }
+.exit-departure .metrics-strip { --exit-order: 2; }
+.exit-departure :is(.day-mode,.rhythm-shortcuts) { --exit-order: 3; }
+.exit-departure .overview-top { --exit-order: 4; }
+.exit-departure .page-heading { --exit-order: 5; }
+.exit-departure .topbar { --exit-order: 6; }
+.exit-departure .sidebar { --exit-order: 7; }
+.exit-transition { position: fixed; inset: 0; z-index: 160; display: grid; place-items: center; isolation: isolate; overflow: hidden; color: var(--transition-leaf); }
+.exit-circle { position: absolute; inset: 0; z-index: -2; background: var(--transition-moss); clip-path: circle(150% at 50% 50%); animation: exit-circle 850ms cubic-bezier(.22,.65,.25,1) both; }
+.exit-glow { position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse at 50% 43%,#dceaaf19,transparent 52%); animation: exit-lights 1800ms ease both; }
+.exit-content { transform: translateY(-10px); }
+.exit-transition .entry-mark { animation: entry-fade 350ms 180ms both; }
+.exit-transition .entry-mark-line { animation: exit-untrace 1100ms 650ms ease both; }
+.exit-transition .entry-mark-base { opacity: .13; }
+.exit-transition .entry-sprout-stem { animation: none; }
+.exit-transition .entry-sprout-leaf { animation: exit-leaf 1100ms 650ms ease both; transform-origin: 20px 34px; }
+.exit-transition .entry-sprout-leaf.right { animation-delay: 720ms; }
+.exit-transition .entry-wordmark { animation: entry-fade 400ms 260ms both; }
+.exit-transition .entry-personal { animation: entry-fade 400ms 320ms both; }
+.exit-welcome { animation: entry-fade 450ms 450ms both; }
+.exit-welcome > span { display: block; max-width: 310px; margin-inline: auto; line-height: 1.6; }
+.exit-welcome:focus { outline: none; }
+.exit-actions { min-height: 70px; margin-top: 25px; }
+.exit-return { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 10px 18px; border: 1px solid #dceaaf55; border-radius: 24px; color: #e3edc6; background: #173c3480; font-size: 13px; }
+.exit-return:hover { background: #173c34; border-color: #dceaafaa; }
+.exit-return:focus-visible { outline: 2px solid #dceaaf; outline-offset: 5px; }
+.exit-error { max-width: 330px; margin: 0 auto 14px; font-size: 13px; line-height: 1.6; color: #f3d6bb; }
+.exit-status { display: flex; justify-content: center; align-items: center; gap: 7px; margin-top: 18px; color: #d0ddc9; font-size: 12px; visibility: hidden; }
+.exit-transition[data-phase="committing"] .exit-status { visibility: visible; }
+.exit-transition[data-phase="reveal"] { pointer-events: none; animation: entry-dissolve var(--entry-dissolve) ease both; }
+.exit-transition[data-phase="reveal"] .exit-actions { visibility: hidden; }
+.exit-transition[data-phase="reveal"] :is(.exit-circle,.exit-glow,.entry-mark,.entry-mark-line,.entry-sprout-leaf,.entry-wordmark,.entry-personal,.exit-welcome) { animation: none; }
+.exit-transition[data-phase="reveal"] .entry-mark-line { stroke-dashoffset: 100; opacity: .15; }
+.exit-transition[data-phase="reveal"] .entry-sprout-leaf { transform: scaleX(.35) rotate(-9deg); opacity: .45; }
+.exit-transition[data-phase="reveal"] .exit-glow { opacity: .08; }
+.exit-transition[data-phase="returning"] { animation: entry-dissolve 200ms ease both; pointer-events: none; }
+.exit-transition[data-phase="returning"] .exit-actions { visibility: hidden; }
+.exit-restoring { animation: exit-restore 200ms ease both; }
+.logout-login .auth-form-wrap { animation: entry-welcome-in var(--entry-dissolve) ease both; }
+.logout-login .auth-story-content { animation: entry-fade var(--entry-dissolve) ease both; }
+@keyframes exit-room { to { opacity: .35; transform: scale(.98); } }
+@keyframes exit-card { to { opacity: 0; transform: translateY(8px); } }
+@keyframes exit-circle { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
+@keyframes exit-untrace { to { stroke-dashoffset: 100; opacity: .15; } }
+@keyframes exit-leaf { to { transform: scaleX(.35) rotate(-9deg); opacity: .45; } }
+@keyframes exit-lights { 0%,25% { opacity: 1; } to { opacity: .08; } }
+@keyframes exit-restore { from { opacity: .35; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+@media(max-width:650px) { .exit-content { transform: translateY(-15px); }.exit-welcome > span { max-width: 270px; } }
+@media(prefers-reduced-motion:reduce) {
+  .exit-departure, .exit-restoring, .exit-departure *, .exit-transition *, .logout-login * { animation: none !important; transform: none !important; }
+  .exit-transition { background: var(--transition-moss); animation: entry-fade 200ms ease both !important; }
+  .exit-transition:is([data-phase="reveal"],[data-phase="returning"]) { animation: entry-dissolve 200ms ease both !important; }
+  .exit-circle { clip-path: none; }.exit-glow { opacity: .08; }
+}

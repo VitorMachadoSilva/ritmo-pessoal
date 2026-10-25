@@ -54,10 +54,10 @@ test("essential mode narrows the day but preserves targets, extra work and XP", 
   assert.equal(xpTotal(state), 10);
   day.water = 3000;
   assert.equal(score(day), 100);
-  assert.equal(xpTotal(state), 20);
+  assert.equal(xpTotal(state), 40);
   day.mode = "full";
   day.mode = "essential";
-  assert.equal(xpTotal(state), 20);
+  assert.equal(xpTotal(state), 40);
 });
 test("legacy essentials get defaults without overriding explicit opt-outs", () => {
   const state = initialState("Teste"),

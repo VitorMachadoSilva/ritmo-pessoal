@@ -13,7 +13,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { dateKey, initialState } from "./defaults.mjs";
+import { validateImportedState } from "./state-rules.mjs";
 import essentialIds from "../shared/essential-habits.json" with { type: "json" };
+import backupLimits from "../shared/backup-limits.json" with { type: "json" };
 import { FocusError, pauseFocus, resumeFocus, finishFocus } from "./focus.mjs";
 import {
   dayKey,
@@ -24,7 +26,10 @@ import {
   stateSchema,
   dayPatch,
   weekNoteSchema,
+  cognitiveGameIdSchema,
+  cognitiveGameResultSchema,
 } from "./schema.mjs";
+import { COGNITIVE_GAME_IDS, createCognitiveGamesState, startCognitiveGame, completeCognitiveGame, cancelCognitiveGame } from "./cognitive-games.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const production = process.argv.includes("--production");
@@ -57,7 +62,14 @@ app.use(
       process.env.RITMO_HTTPS === "1" ? undefined : false,
   }),
 );
-app.use(express.json({ limit: "5mb" }));
+// Keep ordinary JSON requests small. The larger backup parser runs only after
+// the session middleware, on the import route below.
+app.use(
+  express.json({
+    limit: "5mb",
+    skip: (req) => req.path === "/api/import",
+  }),
+);
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
@@ -80,6 +92,13 @@ const getState = () => {
   );
   state.focus ??= null;
   state.weeks ??= {};
+  state.cognitiveGames ??= createCognitiveGamesState();
+  for (const gameId of COGNITIVE_GAME_IDS) {
+    const empty = createCognitiveGamesState()[gameId];
+    state.cognitiveGames[gameId] ??= empty;
+    state.cognitiveGames[gameId].usedChallengeKeys ??= [];
+    state.cognitiveGames[gameId].plays ??= 0;
+  }
   for (const h of state.habits) h.essential ??= essentialIds.includes(h.id);
   for (const d of Object.values(state.days)) {
     d.mode ??= "full";
@@ -106,18 +125,19 @@ const getSession = (req) => {
       .get(digest(token), Date.now())
   );
 };
-const createSession = (res) => {
+const createSession = (res, remember = false) => {
+  const duration = remember ? 7 * 86400000 : 12 * 3600000;
   const token = randomBytes(32).toString("hex");
   db.prepare("DELETE FROM sessions WHERE expires<?").run(Date.now());
   db.prepare("INSERT INTO sessions VALUES(?,?)").run(
     digest(token),
-    Date.now() + 7 * 86400000,
+    Date.now() + duration,
   );
   res.cookie("ritmo_session", token, {
     httpOnly: true,
     sameSite: "strict",
     secure: process.env.RITMO_HTTPS === "1",
-    maxAge: 7 * 86400000,
+    ...(remember ? { maxAge: duration } : {}),
     path: "/",
   });
 };
@@ -125,6 +145,7 @@ const authSchema = z.object({
   username: z.string().trim().min(3).max(100),
   password: z.string().min(12, "Use pelo menos 12 caracteres.").max(128),
   name: z.string().trim().min(1).max(120).optional(),
+  remember: z.boolean().default(false),
 });
 const failures = new Map();
 const rateLimit = (req, res, next) => {
@@ -173,7 +194,7 @@ app.post(
       db.exec("ROLLBACK");
       throw error;
     }
-    createSession(res);
+    createSession(res, input.remember);
     failures.delete(req.ip);
     res.status(201).json({ ok: true });
   }),
@@ -182,7 +203,7 @@ app.post(
   "/api/login",
   rateLimit,
   route((req, res) => {
-    const { username, password } = authSchema.parse(req.body);
+    const { username, password, remember } = authSchema.parse(req.body);
     const owner = db.prepare("SELECT * FROM owner WHERE id=1").get();
     const candidate = scryptSync(password, owner?.salt || "invalid-owner", 64);
     const valid =
@@ -191,7 +212,7 @@ app.post(
       owner.username === username.toLowerCase();
     if (!valid)
       return res.status(401).json({ error: "Login ou senha incorretos." });
-    createSession(res);
+    createSession(res, remember);
     failures.delete(req.ip);
     res.json({ ok: true });
   }),
@@ -239,7 +260,68 @@ app.post(
 );
 app.get(
   "/api/state",
-  route((req, res) => res.json(getState())),
+  route((req, res) => res.json({ ...getState(), serverNow: Date.now() })),
+);
+app.post(
+  "/api/games/:gameId/start",
+  route((req, res) => {
+    const gameId = cognitiveGameIdSchema.parse(req.params.gameId);
+    const { difficulty } = z.object({ difficulty: z.enum(["easy", "medium", "hard"]).default("easy") }).parse(req.body);
+    const state = getState();
+    const progress = state.cognitiveGames[gameId];
+    try {
+      startCognitiveGame(gameId, progress, Date.now(), difficulty);
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ error: error.message, nextAvailableAt: error.nextAvailableAt });
+      throw error;
+    }
+    save(state);
+    res.json({ ...state, serverNow: Date.now() });
+  }),
+);
+app.post(
+  "/api/games/:gameId/complete",
+  route((req, res) => {
+    const gameId = cognitiveGameIdSchema.parse(req.params.gameId);
+    const input = cognitiveGameResultSchema.parse(req.body);
+    const state = getState();
+    try {
+      completeCognitiveGame(gameId, state.cognitiveGames[gameId], input);
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ error: error.message });
+      throw error;
+    }
+    save(state);
+    res.json({ ...state, serverNow: Date.now() });
+  }),
+);
+app.post(
+  "/api/games/:gameId/cancel",
+  route((req, res) => {
+    const gameId = cognitiveGameIdSchema.parse(req.params.gameId);
+    const { sessionId } = z.object({ sessionId: z.string().uuid() }).parse(req.body);
+    const state = getState();
+    try {
+      cancelCognitiveGame(gameId, state.cognitiveGames[gameId], sessionId);
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ error: error.message });
+      throw error;
+    }
+    save(state);
+    res.json({ ...state, serverNow: Date.now() });
+  }),
+);
+app.post(
+  "/api/games/reset-timers",
+  route((req, res) => {
+    const state = getState();
+    if (state.settings.name.trim().toLocaleLowerCase("pt-BR") !== "vitor machado silva")
+      return res.status(403).json({ error: "Este recurso está disponível apenas para a conta Vitor." });
+    for (const gameId of COGNITIVE_GAME_IDS)
+      state.cognitiveGames[gameId].nextAvailableAt = null;
+    save(state);
+    res.json({ ...state, serverNow: Date.now() });
+  }),
 );
 function scheduled(state, date) {
   const weekday = new Date(`${date}T12:00:00`).getDay();
@@ -279,6 +361,13 @@ function updateToday(state) {
   const today = dateKey(state.settings.timezone);
   if (state.days[today]) {
     state.days[today].habits = scheduled(state, today);
+    if (
+      state.days[today].mode === "essential" &&
+      !state.days[today].habits.some((h) => h.essential)
+    )
+      throw new FocusError(
+        "Esta alteração deixaria o dia essencial vazio. Escolha outro hábito essencial ou volte à rotina completa antes de salvar.",
+      );
     state.days[today].threshold = state.settings.dailyThreshold;
   }
 }
@@ -296,19 +385,15 @@ app.patch(
     const day = getDay(state, date);
     if (input.mode !== undefined) {
       if (date !== today)
-        return res
-          .status(400)
-          .json({
-            error:
-              "O ritmo do dia só pode ser ajustado em hoje. O histórico permanece como foi registrado.",
-          });
+        return res.status(400).json({
+          error:
+            "O ritmo do dia só pode ser ajustado em hoje. O histórico permanece como foi registrado.",
+        });
       if (input.mode === "essential" && !day.habits.some((h) => h.essential))
-        return res
-          .status(400)
-          .json({
-            error:
-              "Escolha ao menos um hábito essencial em Minha rotina antes de ativar este modo.",
-          });
+        return res.status(400).json({
+          error:
+            "Escolha ao menos um hábito essencial em Minha rotina antes de ativar este modo.",
+        });
       day.mode = input.mode;
     }
     if (input.habitId !== undefined) {
@@ -494,6 +579,14 @@ for (const action of ["pause", "resume", "finish", "cancel"]) {
           "Esta sessão já foi encerrada. Atualize a página para continuar.",
           409,
         );
+      const { sessionId } = z
+        .object({ sessionId: z.string().min(1).max(100) })
+        .parse(req.body);
+      if (sessionId !== state.focus.id)
+        throw new FocusError(
+          "A sessão de foco mudou em outra aba. Atualize a página antes de continuar; a sessão atual foi preservada.",
+          409,
+        );
       if (action === "pause") state.focus = pauseFocus(state.focus);
       if (action === "resume") state.focus = resumeFocus(state.focus);
       if (action === "finish") {
@@ -564,27 +657,18 @@ app.get(
 );
 app.post(
   "/api/import",
+  express.json({ limit: `${backupLimits.maxImportBytes}b` }),
   route((req, res) => {
     const state = stateSchema.parse(req.body);
-    const ids = state.habits.map((h) => h.id);
-    if (new Set(ids).size !== ids.length)
-      return res
-        .status(400)
-        .json({ error: "O arquivo contém hábitos duplicados." });
-    if (state.settings.startDate > dateKey(state.settings.timezone))
-      return res
-        .status(400)
-        .json({ error: "A data inicial do backup é inválida." });
-    if (
-      state.focus &&
-      (state.focus.date < state.settings.startDate ||
-        state.focus.date > dateKey(state.settings.timezone))
-    )
-      return res
-        .status(400)
-        .json({
-          error: "A sessão de foco está fora do período da sua rotina.",
-        });
+    // Normalize legacy flags before semantic validation; never write a rejected import.
+    for (const h of state.habits) h.essential ??= essentialIds.includes(h.id);
+    for (const day of Object.values(state.days))
+      for (const h of day.habits) h.essential ??= essentialIds.includes(h.id);
+    try {
+      validateImportedState(state);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
     save(state);
     res.json(state);
   }),
@@ -617,7 +701,9 @@ app.use((error, req, res, next) => {
   if (error.type === "entity.too.large")
     return res
       .status(413)
-      .json({ error: "O arquivo excede o limite de 5 MB." });
+      .json({
+        error: `O arquivo excede o limite de ${req.path === "/api/import" ? backupLimits.maxImportLabel : "5 MB"}.`,
+      });
   if (error.type === "entity.parse.failed")
     return res.status(400).json({ error: "O arquivo não contém JSON válido." });
   console.error(error);
@@ -626,9 +712,14 @@ app.use((error, req, res, next) => {
     .json({ error: "Não foi possível salvar agora. Tente novamente." });
 });
 const port = Number(process.env.PORT || 3000);
-const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
-  console.log(`Ritmo disponível em http://localhost:${port}`),
-);
+// Acesso na rede local é opt-in por configuração, mas fica ligado para a instalação
+// local do Ritmo. O login continua obrigatório; isso não publica a aplicação na internet.
+const lanAccess = /^(1|true|yes|on)$/i.test(process.env.RITMO_LAN_ACCESS ?? "true");
+const host = lanAccess ? "0.0.0.0" : (process.env.HOST || "127.0.0.1");
+const server = app.listen(port, host, () => {
+  console.log(`Ritmo disponível em http://localhost:${port}`);
+  console.log(`Acesso na rede local: ${lanAccess ? "ativado" : "desativado"} (escuta em ${host})`);
+});
 for (const signal of ["SIGTERM", "SIGINT"])
   process.on(signal, () =>
     server.close(() => {

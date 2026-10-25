@@ -1,5 +1,6 @@
 import type { Category, Day, Habit, State } from "./types";
 import essentialIds from "../shared/essential-habits.json" with { type: "json" };
+import initialDifficulty from "../shared/habit-difficulty.json" with { type: "json" };
 export const categories: Record<
   Category,
   {
@@ -85,6 +86,9 @@ export function isEssential(h: Habit) {
 export function activeHabits(d: Day) {
   return d.mode === "essential" ? d.habits.filter(isEssential) : d.habits;
 }
+export function orderedHabits(d: Day) {
+  return [...activeHabits(d)].sort((a, b) => a.time.localeCompare(b.time));
+}
 export function isDone(h: Habit, d: Day) {
   return habitValue(h, d) >= h.target;
 }
@@ -110,8 +114,44 @@ export function completed(d: Day) {
 export function allCompleted(d: Day) {
   return d.habits.filter((h) => isDone(h, d)).length;
 }
+export const difficultyPoints = { light: 10, moderate: 20, challenging: 30 } as const;
+export function habitDifficulty(h: Habit): keyof typeof difficultyPoints {
+  return h.difficulty ?? (initialDifficulty as Record<string, keyof typeof difficultyPoints>)[h.id] ?? "moderate";
+}
+export function habitXp(h: Habit) {
+  return difficultyPoints[habitDifficulty(h)];
+}
+export function isPerfectDay(d: Day) {
+  return d.habits.length > 0 && d.habits.every((h) => isDone(h, d));
+}
+export function perfectDayBonus(days: number) {
+  return days >= 30 ? 50 : days >= 14 ? 40 : days >= 7 ? 30 : days >= 3 ? 20 : 10;
+}
+export function perfectStreak(s: State, today: string) {
+  let key = isPerfectDay(dayFor(s, today)) ? today : addDays(today, -1);
+  let count = 0;
+  while (key >= s.settings.startDate && s.days[key] && isPerfectDay(s.days[key])) {
+    count++;
+    key = addDays(key, -1);
+  }
+  return count;
+}
 export function xpTotal(s: State) {
-  return Object.values(s.days).reduce((n, d) => n + allCompleted(d) * 10, 0);
+  let total = 0;
+  let perfectDays = 0;
+  let previous = "";
+  const today = todayKey(s.settings.timezone);
+  for (const key of Object.keys(s.days).sort()) {
+    if (key < s.settings.startDate || key > today) continue;
+    const day = s.days[key];
+    total += day.habits.reduce((points, habit) => points + (isDone(habit, day) ? habitXp(habit) : 0), 0);
+    if (isPerfectDay(day)) {
+      perfectDays = previous === addDays(key, -1) ? perfectDays + 1 : 1;
+      total += perfectDayBonus(perfectDays);
+    } else perfectDays = 0;
+    previous = key;
+  }
+  return total;
 }
 export function streak(s: State, today: string) {
   let key =
@@ -141,6 +181,31 @@ export function bestStreak(s: State) {
     best = Math.max(best, current);
   }
   return best;
+}
+function hasUsageRecord(day?: Day) {
+  if (!day) return false;
+  return Object.values(day.entries).some((value) => value > 0)
+    || day.water > 0
+    || day.sleep !== null
+    || day.weight !== null
+    || day.energy !== null
+    || day.mood !== null
+    || !!day.journal.trim()
+    || !!day.win.trim()
+    || !!day.next.trim()
+    || day.workout !== null
+    || !!day.focusSessions?.length
+    || day.mode === "essential";
+}
+/** Consecutive calendar days with a saved activity; today may still be completed. */
+export function usageStreak(s: State, today: string) {
+  let key = hasUsageRecord(s.days[today]) ? today : addDays(today, -1);
+  let count = 0;
+  while (key >= s.settings.startDate && hasUsageRecord(s.days[key])) {
+    count++;
+    key = addDays(key, -1);
+  }
+  return count;
 }
 export async function api<T>(
   url: string,

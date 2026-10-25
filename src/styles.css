@@ -611,23 +611,6 @@ legend {
   cursor: pointer;
   padding: 6px 4px;
 }
-.date-label input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  padding: 0;
-  min-height: 0;
-  cursor: pointer;
-}
-.date-label input::-webkit-calendar-picker-indicator {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  height: auto;
-  opacity: 0;
-  cursor: pointer;
-}
 .date-label:focus-within {
   outline: 2px solid #719e89;
   outline-offset: 2px;
@@ -1008,8 +991,6 @@ legend {
   height: 512px;
   overflow-y: auto;
   padding: 0 24px;
-  scrollbar-width: thin;
-  scrollbar-color: #dce3d6 transparent;
 }
 .time-group {
   padding-top: 19px;
@@ -1467,8 +1448,6 @@ legend {
 .heatmap-scroll {
   overflow: auto;
   padding-bottom: 2px;
-  scrollbar-width: thin;
-  scrollbar-color: #d9e3d1 transparent;
 }
 .heatmap-months {
   display: grid;
@@ -1689,6 +1668,28 @@ legend {
   height: 27px;
   flex-shrink: 0;
 }
+.toast-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+.toast-copy strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.toast-copy > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.toast-copy small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
 .toast > button {
   display: flex;
   align-items: center;
@@ -1698,6 +1699,17 @@ legend {
 }
 .toast.toast-error {
   border-color: #eacac6;
+}
+.toast-achievement {
+  border-color: #d8e8c4;
+}
+.toast-info > span {
+  color: #647b83;
+  background: #edf3f4;
+}
+.toast-achievement > span {
+  color: #53753d;
+  background: #eaf3df;
 }
 .toast-error > span {
   color: #a5544b;
@@ -1736,8 +1748,6 @@ legend {
   border-radius: 19px;
   z-index: 70;
   box-shadow: 0 24px 95px #142c2733;
-  scrollbar-width: thin;
-  scrollbar-color: #d9e1d4 transparent;
 }
 .modal.wide {
   max-width: 720px;
@@ -2153,17 +2163,69 @@ legend {
   position: relative;
 }
 .input-unit input {
-  padding-right: 40px;
+  padding-right: 82px;
   font-family: "Manrope Variable", sans-serif;
   font-size: 23px;
   min-height: 54px;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
-.input-unit > span {
+.input-unit input::-webkit-inner-spin-button,
+.input-unit input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.input-unit-label {
   position: absolute;
-  right: 14px;
+  right: 12px;
   top: 18px;
   color: #9aab8b;
   font-size: 12px;
+}
+.input-unit-stepper {
+  position: absolute;
+  top: 7px;
+  right: 38px;
+  bottom: 7px;
+  display: flex;
+  width: 25px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-raised);
+}
+.input-unit-stepper button {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+.input-unit-stepper button + button {
+  border-top: 1px solid var(--border);
+}
+.input-unit-stepper button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--forest);
+}
+.input-unit-stepper button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.input-unit-stepper button:disabled {
+  cursor: not-allowed;
+  opacity: .38;
+}
+.input-unit-stepper svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.2;
 }
 .achievements {
   margin-top: 32px;
@@ -5388,8 +5450,6 @@ legend {
 .journal-history {
   max-height: 490px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #d3dfc9 transparent;
 }
 /* Readability pass: status stays secondary through spacing, never through illegibility. */
 :root {

@@ -1,0 +1,40 @@
+.habit-journey {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 3px 0 17px;
+  color: var(--text-muted, #65745e);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.habit-journey > div { display: flex; gap: 7px; }
+.habit-journey .icon-button { width: 36px; height: 36px; border: 1px solid var(--border, #dce5d4); }
+.habit-journey .icon-button:disabled { opacity: .35; cursor: not-allowed; }
+.habit-detail .stepper input[aria-invalid="true"] { border-color: #af6040; box-shadow: 0 0 0 3px #af604025; }
+.habit-value-status, .habit-value-error { display: block; margin-top: 9px; font-size: 12px; line-height: 1.45; }
+.habit-value-status { color: var(--text-muted, #65745e); }
+.habit-value-status.below-goal, .habit-value-error { color: #aa6032; }
+.habit-amount-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.habit-partial { color: #a35c34; font-size: 11px; font-weight: 750; line-height: 1.25; text-align: right; }
+.habit-row.is-partial .habit-check { border-color: #bd865c; color: #a35c34; }
+.habit-discard { margin-top: 16px; padding: 14px; border-radius: 12px; background: #fff3e9; border: 1px solid #e8c8ad; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.habit-discard p { width: 100%; margin: 0 0 3px; color: #764c32; font-size: 12px; }
+.habit-discard .button { font-size: 12px; min-height: 36px; }
+/* A pending write locks controls without making the whole dashboard pulse. */
+.app-shell button[data-pending-disabled]:disabled { opacity: 1; cursor: progress; }
+:root[data-theme="dark"] .habit-value-status.below-goal,
+:root[data-theme="dark"] .habit-value-error,
+:root[data-theme="dark"] .habit-partial { color: #e6ad7d; }
+:root[data-theme="dark"] .habit-discard { background: #3b3029; border-color: #71513a; }
+:root[data-theme="dark"] .habit-discard p { color: #efc7a3; }
+@media (max-width: 600px) {
+  .habit-journey { margin-bottom: 13px; }
+  .habit-amount-wrap { align-items: flex-start; }
+  .habit-partial { text-align: left; }
+  .habit-discard .button { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orbit svg path { transition: none !important; }
+}

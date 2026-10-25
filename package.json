@@ -1,13 +1,13 @@
 {
   "name": "ritmo-pessoal",
-  "version": "1.1.0",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "node --env-file-if-exists=.env --watch server/index.mjs",
+    "dev": "node --env-file-if-exists=.env server/index.mjs",
     "build": "tsc --noEmit && vite build",
     "start": "node --env-file-if-exists=.env server/index.mjs --production",
     "recover": "node --env-file-if-exists=.env scripts/recover-access.mjs",
