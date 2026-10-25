@@ -47,6 +47,7 @@ import { ProfileModal } from "./components/app/ProfileModal";
 import { Toast } from "./components/app/Toast";
 import { Sidebar } from "./components/app/Sidebar";
 import { Topbar } from "./components/app/Topbar";
+import { HelpAgent } from "./components/app/HelpAgent";
 import { useTutorialController } from "./hooks/useTutorialController";
 import { useMutationController } from "./hooks/useMutationController";
 export default function App() {
@@ -65,7 +66,7 @@ export default function App() {
   const welcomeAfterEntry = useRef(false);
   const exitActive = useRef<() => boolean>(() => false);
   const { activeTutorial, completedTutorials, startTutorial, closeTutorial, completeTutorial, dismissTutorial } = useTutorialController(page, Boolean(dialog));
-  const { busy, mutate, mutating, setBusy, setToast, toast } = useMutationController({ state, setState, date, setDate, exitActive: () => exitActive.current() });
+  const { busy, mutate, mutating, setBusy, setToast, toast, habitCompletions, consumeHabitCompletion } = useMutationController({ state, setState, date, setDate, exitActive: () => exitActive.current() });
   const journalDirty = useRef(false);
   const route = useRef({ page, index: 0 });
   const restoringRoute = useRef<{ page: PageId; index: number } | null>(null);
@@ -621,6 +622,8 @@ export default function App() {
                 addHabit={() => editHabit()}
                 startTutorial={startTutorial}
                 completedTutorials={completedTutorials}
+                habitCompletions={habitCompletions}
+                onHabitCompletionConsumed={consumeHabitCompletion}
               />
             ) : page === "rotina" ? (
               <RoutinePage {...props} />
@@ -741,6 +744,7 @@ export default function App() {
         </Modal>
       )}
       {activeTutorial && !dialog && <GuidedTutorial key={activeTutorial} id={activeTutorial} onClose={closeTutorial} onComplete={completeTutorial} />}
+      {exit.phase === "idle" && !entryCover && <HelpAgent page={page} />}
       {toast && <Toast notice={toast} onClose={() => setToast(null)} />}
     </div>
     {entryCover && <EntrySurface phase="reveal" />}

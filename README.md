@@ -20,6 +20,7 @@ Aplicação web pessoal para organizar hábitos, alimentação, exercícios e be
 - Revisão semanal com médias, comparação por área e reflexões editáveis.
 - Jogos da mente com memória de pares, sequência numérica, Stroop e busca visual; memória usa 8/10/12 pares, sequência 6/7/8 algarismos, Stroop 12/18/24 rodadas e Schulte grades 5×5/6×6/7×7. Cada jogo tem uma rodada independente, com nova configuração 24 horas após conclusão ou cancelamento confirmado; o intervalo vale para qualquer dificuldade do mesmo jogo.
 - Tutoriais manuais por página e fluxo, com destaque contextual, navegação não bloqueante e conclusão salva somente neste navegador.
+- Assistente Folhinha com respostas locais sobre o Ritmo, sugestões por página e conversa temporária no navegador.
 - Jornada de hábitos em ordem horária, com navegação anterior/próximo; registros abaixo da meta ficam salvos e sinalizados sem XP.
 
 ## Executar

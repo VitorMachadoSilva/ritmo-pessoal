@@ -274,7 +274,7 @@ textarea:focus-visible, select:focus-visible {
 .habit-row { transition: background-color 180ms ease; }
 .habit-check { transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
 .habit-check:active:not(:disabled), .set-check:active { transform: scale(.92); }
-.habit-check.checked svg, .set-check.checked svg { animation: check-in 200ms ease-out; }
+.habit-row.is-celebrating .habit-check.checked > svg:first-child, .set-check.checked svg { animation: check-in 200ms ease-out; }
 .water-fill { transition: height 450ms cubic-bezier(.2,.7,.3,1); }
 .orbit svg path { transition: stroke 260ms ease; }
 .review-bar-track i { transition: height 350ms ease-out; }

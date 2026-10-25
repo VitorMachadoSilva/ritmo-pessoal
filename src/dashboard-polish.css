@@ -24,6 +24,27 @@
 .time-group-items .timeline-row:last-child .habit-row { border-bottom: 0; }
 .time-group-items .timeline-row::before { content: none; }
 
+/* Celebration stays anchored to the check so it never changes row geometry. */
+.habit-check { position: relative; }
+.habit-sprout {
+  position: absolute;
+  z-index: 1;
+  right: -7px;
+  top: -11px;
+  color: #6d9957;
+  fill: #d5e8a2;
+  stroke-width: 2.2;
+  pointer-events: none;
+  animation: habit-sprout-pop 620ms cubic-bezier(.2,.8,.25,1) both;
+}
+:root[data-theme="dark"] .habit-sprout { color: #bddb8e; fill: #728c54; }
+@keyframes habit-sprout-pop {
+  0% { opacity: 0; transform: translateY(4px) scale(.45) rotate(-12deg); }
+  38% { opacity: 1; transform: translateY(-2px) scale(1.12) rotate(5deg); }
+  72% { opacity: 1; transform: translateY(-2px) scale(1) rotate(0); }
+  100% { opacity: 0; transform: translateY(-7px) scale(.86) rotate(5deg); }
+}
+
 /* Give the final heatmap column and today's outline a complete edge. */
 .heatmap-inner { padding-inline-end: 9px; }
 .heatmap-scroll { margin-right: 0; scroll-padding-inline-end: 9px; }

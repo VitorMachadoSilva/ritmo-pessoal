@@ -19,6 +19,7 @@ import "./routine-pagination.css";
 import "./controls.css";
 import "./tutorials.css";
 import "./games.css";
+import "./help-agent.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />

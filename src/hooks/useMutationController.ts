@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { State } from "../types";
 import { api, todayKey, xpTotal } from "../lib";
 import { errorToastForMutation, successToastForMutation, type ToastNotice } from "../toast-feedback";
 import { resolveMutationTarget, type MutationTarget } from "../api-operations";
+import { newlyCompletedHabits } from "../../shared/habit-completions.mjs";
+
+export type HabitCompletionEvent = { date: string; habitId: string };
 
 export function useMutationController({ state, setState, date, setDate, exitActive }: {
   state: State | null;
@@ -14,13 +17,8 @@ export function useMutationController({ state, setState, date, setDate, exitActi
 }) {
   const [toast, setToast] = useState<ToastNotice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [habitCompletions, setHabitCompletions] = useState<HabitCompletionEvent[]>([]);
   const mutating = useRef(false);
-
-  useEffect(() => {
-    if (!toast) return;
-    const id = window.setTimeout(() => setToast(null), toast.tone === "error" ? 9000 : toast.tone === "achievement" ? 5000 : 3600);
-    return () => window.clearTimeout(id);
-  }, [toast]);
 
   async function mutate(target: MutationTarget, body?: unknown, method?: string): Promise<boolean> {
     if (mutating.current || exitActive()) return false;
@@ -35,6 +33,18 @@ export function useMutationController({ state, setState, date, setDate, exitActi
       const before = state ? xpTotal(state) : 0;
       const result = await api<State | { ok: boolean }>(url, body, method);
       if ("version" in result) {
+        if (state && (operation === "day.update" || operation === "focus.finish")) {
+          const newlyCompleted = newlyCompletedHabits(state, result);
+          if (newlyCompleted.length) {
+            setHabitCompletions((current) => {
+              const pending = new Set(current.map(({ date, habitId }) => `${date}:${habitId}`));
+              return [
+                ...current,
+                ...newlyCompleted.filter(({ date, habitId }) => !pending.has(`${date}:${habitId}`)),
+              ];
+            });
+          }
+        }
         setState(result);
         const resultToday = todayKey(result.settings.timezone);
         if (date < result.settings.startDate || date > resultToday) setDate(resultToday);
@@ -55,5 +65,9 @@ export function useMutationController({ state, setState, date, setDate, exitActi
     }
   }
 
-  return { busy, mutate, mutating, setBusy, setToast, toast };
+  function consumeHabitCompletion(date: string, habitId: string) {
+    setHabitCompletions((current) => current.filter((event) => event.date !== date || event.habitId !== habitId));
+  }
+
+  return { busy, mutate, mutating, setBusy, setToast, toast, habitCompletions, consumeHabitCompletion };
 }

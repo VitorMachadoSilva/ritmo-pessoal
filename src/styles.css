@@ -1642,7 +1642,7 @@ legend {
 .toast {
   position: fixed;
   bottom: 25px;
-  left: calc(50% + 112px);
+  left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -1655,7 +1655,12 @@ legend {
   font-size: 12px;
   z-index: 100;
   max-width: calc(100vw - 40px);
+  pointer-events: auto;
   animation: toast-in 0.2s ease-out;
+}
+.toast-exiting {
+  pointer-events: none;
+  animation: toast-out 0.4s ease-in forwards;
 }
 .toast > span {
   display: flex;
@@ -1723,6 +1728,16 @@ legend {
   to {
     opacity: 1;
     bottom: 25px;
+  }
+}
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 14px);
   }
 }
 .modal-overlay {
@@ -2137,7 +2152,7 @@ legend {
     padding-left: 20px;
   }
   .toast {
-    left: calc(50% + 97px);
+    left: 50%;
   }
   .routine-tools .filter-chips {
     gap: 2px;
@@ -2576,7 +2591,7 @@ legend {
     padding: 20px;
   }
   .toast {
-    left: calc(50% + 87px);
+    left: 50%;
   }
 }
 @media (max-width: 800px) {
@@ -2679,7 +2694,6 @@ legend {
   .toast {
     left: 50%;
     bottom: 87px;
-    animation: none;
   }
   .page-intro {
     margin-top: 0;

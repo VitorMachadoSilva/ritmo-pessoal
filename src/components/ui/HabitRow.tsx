@@ -1,4 +1,5 @@
-import { Check, X, Droplets, Moon, Plus } from "lucide-react";
+import { Check, X, Droplets, Moon, Plus, Sprout } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { Day, Habit } from "../../types";
 import { habitValue, habitXp, isDone, number } from "../../lib";
 import { Tag } from "./primitives";
@@ -9,6 +10,8 @@ export function HabitRow({
   onEdit,
   busy,
   status,
+  celebrating = false,
+  onCelebrationConsumed,
 }: {
   habit: Habit;
   day: Day;
@@ -16,7 +19,25 @@ export function HabitRow({
   onEdit: () => void;
   busy: boolean;
   status?: string;
+  celebrating?: boolean;
+  onCelebrationConsumed?: () => void;
 }) {
+  const [showSprout, setShowSprout] = useState(false);
+  const handledCelebration = useRef(false);
+  useEffect(() => {
+    if (celebrating && !handledCelebration.current) {
+      handledCelebration.current = true;
+      setShowSprout(true);
+      onCelebrationConsumed?.();
+    } else if (!celebrating) {
+      handledCelebration.current = false;
+    }
+  }, [celebrating, onCelebrationConsumed]);
+  useEffect(() => {
+    if (!showSprout) return;
+    const timeout = window.setTimeout(() => setShowSprout(false), 720);
+    return () => window.clearTimeout(timeout);
+  }, [showSprout]);
   const done = isDone(habit, day);
   const partial = habit.kind !== "check" && habitValue(habit, day) > 0 && !done;
   const amount =
@@ -28,7 +49,7 @@ export function HabitRow({
           ? `${day.entries[habit.id] ?? 0} / ${habit.target} ${habit.unit}`
           : null;
   return (
-    <div className={`habit-row ${done ? "is-done" : ""} ${partial ? "is-partial" : ""}`}>
+    <div className={`habit-row ${done ? "is-done" : ""} ${partial ? "is-partial" : ""} ${showSprout ? "is-celebrating" : ""}`}>
       <button
         className={`habit-check ${done ? "checked" : ""}`}
         onClick={onToggle}
@@ -48,6 +69,7 @@ export function HabitRow({
         ) : (
           <Plus size={14} />
         )}
+        {showSprout && <Sprout className="habit-sprout" size={15} aria-hidden="true" />}
       </button>
       <button className="habit-body" onClick={onEdit}>
         <span className="habit-title">{habit.title}</span>

@@ -7,6 +7,7 @@ import { WaterWidget } from "./components/dashboard/WaterWidget";
 import { MoodWidget } from "./components/dashboard/MoodWidget";
 import { WeightWidget } from "./components/dashboard/WeightWidget";
 import { apiOperations } from "./api-operations";
+import type { HabitCompletionEvent } from "./hooks/useMutationController";
 export { WaterWidget, MoodWidget, WeightWidget };
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
   addHabit: () => void;
   startTutorial: (id: string, trigger: HTMLElement) => void;
   completedTutorials: string[];
+  habitCompletions: HabitCompletionEvent[];
+  onHabitCompletionConsumed: (date: string, habitId: string) => void;
 };
 
 export default function Dashboard({
@@ -35,6 +38,8 @@ export default function Dashboard({
   addHabit,
   startTutorial,
   completedTutorials,
+  habitCompletions,
+  onHabitCompletionConsumed,
 }: Props) {
   const day = dayFor(state, date);
   const [filter, setFilter] = useState("all");
@@ -425,6 +430,8 @@ export default function Dashboard({
                           habit={h}
                           day={day}
                           busy={busy}
+                          celebrating={habitCompletions.some((event) => event.date === date && event.habitId === h.id)}
+                          onCelebrationConsumed={() => onHabitCompletionConsumed(date, h.id)}
                           status={
                             date < today
                               ? "Pendente"
