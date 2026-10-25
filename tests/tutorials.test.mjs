@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   parseTutorialProgress,
   saveTutorialProgress,
@@ -11,7 +12,14 @@ import {
 } from "../src/tutorials.ts";
 
 const pageIds = ["hoje", "rotina", "evolucao", "treinos", "alimentacao", "diario", "foco", "semana", "jogos", "ajustes"];
-const source = readdirSync(new URL("../src/", import.meta.url)).filter((name) => name.endsWith(".tsx")).map((name) => readFileSync(new URL(`../src/${name}`, import.meta.url), "utf8")).join("\n");
+function readTsxTree(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return readTsxTree(path);
+    return entry.name.endsWith(".tsx") ? [readFileSync(path, "utf8")] : [];
+  });
+}
+const source = readTsxTree(fileURLToPath(new URL("../src/", import.meta.url))).join("\n");
 
 test("cada página tem guia e todos os identificadores de guias são únicos", () => {
   const ids = tutorials.map((guide) => guide.id);

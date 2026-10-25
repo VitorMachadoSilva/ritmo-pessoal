@@ -2,32 +2,20 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
-  BookOpen,
-  Brain,
   CalendarDays,
-  ChartNoAxesCombined,
   Check,
-  CircleAlert,
-  ChevronRight,
   CircleHelp,
-  Flame,
-  Dumbbell,
   Heart,
-  House,
-  ListChecks,
   LoaderCircle,
   LogOut,
   Menu,
   Plus,
   Settings2,
   ShieldCheck,
-  Sprout,
-  Utensils,
   WifiOff,
   X,
-  Timer,
-  CalendarCheck2,
 } from "lucide-react";
+import { apiEndpoints, apiOperations } from "./api-operations";
 import type { Habit, PageId, State } from "./types";
 import { api, dateLabel, dayFor, habitValue, isDone, orderedHabits, todayKey, usageStreak, xpTotal } from "./lib";
 import { DatePicker, Logo, Modal, useNow } from "./ui";
@@ -37,16 +25,12 @@ import Auth from "./Auth";
 import { EntrySurface, ENTRY_TIMING } from "./EntryTransition";
 import { ExitSurface, useExitSequence } from "./ExitTransition";
 import { revokeSession } from "./exit-sequence";
-import { ThemeToggle } from "./Theme";
 import { GuidedTutorial, TutorialTrigger } from "./GuidedTutorial";
-import { parseTutorialProgress, saveTutorialProgress, TUTORIAL_STORAGE_KEY, tutorialFor } from "./tutorials";
 import Dashboard from "./Dashboard";
-import { FocusPage, FocusIndicator } from "./Focus";
+import { FocusPage } from "./Focus";
 import { ReviewPage } from "./Review";
-import LeafBadge from "./components/LeafBadge";
 import { GamesPage } from "./Games";
 import { weekStart } from "./review-data";
-import { errorToastForMutation, successToastForMutation, type ToastNotice } from "./toast-feedback";
 import {
   ConfirmDialog,
   WelcomePanel,
@@ -58,31 +42,13 @@ import {
   SettingsPage,
 } from "./pages";
 import type { DialogOptions, PageProps } from "./pages";
-const navItems = [
-  { id: "hoje", title: "Visão geral", icon: House },
-  { id: "rotina", title: "Minha rotina", icon: ListChecks },
-  { id: "evolucao", title: "Evolução", icon: ChartNoAxesCombined },
-  { id: "treinos", title: "Treinos", icon: Dumbbell },
-  { id: "jogos", title: "Jogos da mente", icon: Brain },
-  { id: "alimentacao", title: "Alimentação", icon: Utensils },
-  { id: "diario", title: "Meu diário", icon: BookOpen },
-  { id: "foco", title: "Tempo de foco", icon: Timer },
-  { id: "semana", title: "Revisão semanal", icon: CalendarCheck2 },
-] as const;
-const pageNames: Record<PageId, string> = {
-  hoje: "Visão geral",
-  rotina: "Minha rotina",
-  evolucao: "Evolução",
-  treinos: "Treinos",
-  alimentacao: "Alimentação",
-  diario: "Meu diário",
-  ajustes: "Ajustes",
-  foco: "Tempo de foco",
-  semana: "Revisão semanal",
-  jogos: "Jogos da mente",
-};
-const validPage = (hash: string): PageId =>
-  Object.hasOwn(pageNames, hash) ? (hash as PageId) : "hoje";
+import { navItems, pageNames, validPage } from "./navigation";
+import { ProfileModal } from "./components/app/ProfileModal";
+import { Toast } from "./components/app/Toast";
+import { Sidebar } from "./components/app/Sidebar";
+import { Topbar } from "./components/app/Topbar";
+import { useTutorialController } from "./hooks/useTutorialController";
+import { useMutationController } from "./hooks/useMutationController";
 export default function App() {
   const [auth, setAuth] = useState<{
     configured: boolean;
@@ -92,20 +58,14 @@ export default function App() {
   const [error, setError] = useState("");
   const [date, setDate] = useState(todayKey());
   const [page, setPage] = useState<PageId>(validPage(location.hash.slice(1)));
-  const [completedTutorials, setCompletedTutorials] = useState<string[]>(() => {
-    try { return parseTutorialProgress(window.localStorage.getItem(TUTORIAL_STORAGE_KEY)).completed; }
-    catch { return []; }
-  });
-  const [activeTutorial, setActiveTutorial] = useState<string | null>(null);
-  const tutorialOrigin = useRef<HTMLElement | null>(null);
   const [dialog, setDialog] = useState<DialogOptions | null>(null);
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const [entryReveal, setEntryReveal] = useState(false);
   const [entryCover, setEntryCover] = useState(false);
   const welcomeAfterEntry = useRef(false);
-  const [toast, setToast] = useState<ToastNotice | null>(null);
-  const [busy, setBusy] = useState(false);
-  const mutating = useRef(false);
+  const exitActive = useRef<() => boolean>(() => false);
+  const { activeTutorial, completedTutorials, startTutorial, closeTutorial, completeTutorial, dismissTutorial } = useTutorialController(page, Boolean(dialog));
+  const { busy, mutate, mutating, setBusy, setToast, toast } = useMutationController({ state, setState, date, setDate, exitActive: () => exitActive.current() });
   const journalDirty = useRef(false);
   const route = useRef({ page, index: 0 });
   const restoringRoute = useRef<{ page: PageId; index: number } | null>(null);
@@ -114,29 +74,6 @@ export default function App() {
   );
   const [menu, setMenu] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const startTutorial = useCallback((id: string, trigger: HTMLElement) => {
-    const guide = tutorialFor(id);
-    if (!guide || guide.page !== page || dialog) return;
-    tutorialOrigin.current = trigger;
-    setActiveTutorial(id);
-  }, [page, dialog]);
-  const closeTutorial = useCallback(() => {
-    setActiveTutorial(null);
-    requestAnimationFrame(() => {
-      const origin = tutorialOrigin.current;
-      if (origin?.isConnected) origin.focus({ preventScroll: true });
-      tutorialOrigin.current = null;
-    });
-  }, []);
-  const completeTutorial = useCallback((id: string) => {
-    const next = [...new Set([...completedTutorials, id])];
-    setCompletedTutorials(next);
-    saveTutorialProgress(next);
-    closeTutorial();
-  }, [completedTutorials, closeTutorial]);
-  useEffect(() => {
-    if (activeTutorial && tutorialFor(activeTutorial)?.page !== page) setActiveTutorial(null);
-  }, [activeTutorial, page]);
   const exitOrigin = useRef<HTMLElement | null>(null);
   const exit = useExitSequence(async () => {
     await revokeSession();
@@ -149,8 +86,9 @@ export default function App() {
     setPage("hoje"); setDate(todayKey()); route.current.page = "hoje";
     history.replaceState({ ...history.state, ritmoIndex: route.current.index }, "", "#hoje");
   });
+  exitActive.current = exit.active;
   const previousExit = useRef(exit.phase);
-  useEffect(() => { if (dialog || exit.phase !== "idle") setActiveTutorial(null); }, [dialog, exit.phase]);
+  useEffect(() => { if (dialog || exit.phase !== "idle") dismissTutorial(); }, [dialog, exit.phase]);
   useEffect(() => {
     if (previousExit.current === "returning" && exit.phase === "idle") {
       const origin = exitOrigin.current;
@@ -170,8 +108,6 @@ export default function App() {
     : null;
   const totalXp = previewLevel ? (previewLevel - 1) * 500 : actualTotalXp;
   const level = previewLevel ?? Math.floor(actualTotalXp / 500) + 1;
-  const xpInLevel = previewLevel ? 0 : actualTotalXp % 500;
-  const xpToNextLevel = 500 - xpInLevel;
   const usageDays = state ? usageStreak(state, today) : 0;
   const load = useCallback(async () => {
     try {
@@ -179,10 +115,10 @@ export default function App() {
       const status = await api<{
         configured: boolean;
         authenticated: boolean;
-      }>("/api/auth");
+      }>(apiEndpoints.auth);
       setAuth(status);
       if (status.authenticated) {
-        const data = await api<State>("/api/state");
+        const data = await api<State>(apiEndpoints.state);
         setState(data);
         setDate(todayKey(data.settings.timezone));
       }
@@ -280,11 +216,6 @@ export default function App() {
     };
   }, []);
   useEffect(() => {
-    if (!toast) return;
-    const id = setTimeout(() => setToast(null), toast.tone === "error" ? 9000 : toast.tone === "achievement" ? 5000 : 3600);
-    return () => clearTimeout(id);
-  }, [toast]);
-  useEffect(() => {
     const dirty = (e: Event) => {
       journalDirty.current = (e as CustomEvent).detail;
     };
@@ -300,50 +231,6 @@ export default function App() {
       previousToday.current = today;
     }
   }, [today, date, now]);
-  async function mutate(
-    url: string,
-    body?: unknown,
-    method?: string,
-  ): Promise<boolean> {
-    if (mutating.current || exit.active()) return false;
-    mutating.current = true;
-    const habitId = url.startsWith("/api/habits/") ? url.slice("/api/habits/".length) : "";
-    const previouslyArchived = Boolean(habitId && state?.habits.find((habit) => habit.id === habitId)?.archived);
-    // Most local writes finish before a loading state can be perceived.
-    // Keep the duplicate-write guard immediate, but avoid flashing every disabled control.
-    const busyTimer = window.setTimeout(() => setBusy(true), 180);
-    try {
-      const before = state ? xpTotal(state) : 0;
-      const result = await api<
-        | State
-        | {
-            ok: boolean;
-          }
-      >(url, body, method);
-      if ("version" in result) {
-        setState(result);
-        if (
-          date < result.settings.startDate ||
-          date > todayKey(result.settings.timezone)
-        )
-          setDate(todayKey(result.settings.timezone));
-        const gained = xpTotal(result) - before;
-        const notice = successToastForMutation(url, body, method, gained, previouslyArchived);
-        if (notice) setToast(notice);
-      } else {
-        const notice = successToastForMutation(url, body, method, 0, previouslyArchived);
-        if (notice) setToast(notice);
-      }
-      return true;
-    } catch (e) {
-      setToast(errorToastForMutation(url, e, body, method, previouslyArchived));
-      return false;
-    } finally {
-      window.clearTimeout(busyTimer);
-      mutating.current = false;
-      setBusy(false);
-    }
-  }
   function confirm(
     title: string,
     body: string,
@@ -412,7 +299,7 @@ export default function App() {
     confirm(
       "Remover da rotina?",
       `“${h.title}” deixará de aparecer a partir de hoje. Seu histórico será mantido. Você poderá restaurá-lo em Minha rotina.`,
-      () => mutate(`/api/habits/${h.id}`, { ...h, archived: true }, "PUT"),
+      () => mutate(apiOperations.habit.remove(h.id), { ...h, archived: true }, "PUT"),
     );
   }
   function openHabit(h: Habit) {
@@ -568,7 +455,7 @@ export default function App() {
       <Auth
         blocked={exit.phase !== "idle"}
         configured={auth.configured}
-        prepare={() => api<State>("/api/state")}
+        prepare={() => api<State>(apiEndpoints.state)}
         onSuccess={(prepared) => {
           welcomeAfterEntry.current = !auth.configured;
           setState(prepared);
@@ -645,95 +532,9 @@ export default function App() {
   return (
     <>
     <div className={`app-shell${entryReveal ? " entry-reveal" : ""}${exit.phase === "returning" ? " exit-restoring" : exit.phase !== "idle" ? " exit-departure" : ""}`} inert={entryCover || exit.phase !== "idle"} aria-hidden={entryCover || exit.phase !== "idle" || undefined}>
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <Logo />
-          <span className="personal-label">Pessoal</span>
-        </div>
-        <div className="sidebar-label">Seu espaço</div>
-        <nav aria-label="Navegação principal">{links}</nav>
-        <div className="sidebar-bottom">
-          <button className="sidebar-help" onClick={help}>
-            <span className="help-sprout">
-              <Sprout size={24} strokeWidth={1.5} />
-            </span>
-            <strong>Cultive sua melhor versão.</strong>
-            <p>
-              Um compromisso pequeno.
-              <br />
-              Uma mudança de verdade.
-            </p>
-            <span>
-              Conhecer meu ritmo
-              <ArrowUpRight size={14} />
-            </span>
-          </button>
-          <button
-            className={`nav-link ${page === "ajustes" ? "active" : ""}`}
-            onClick={() => nav("ajustes")}
-          >
-            <Settings2 size={19} />
-            <span>Ajustes</span>
-          </button>
-          <button className="nav-link" onClick={help}>
-            <CircleHelp size={19} />
-            <span>Como funciona</span>
-          </button>
-          <div className="sidebar-profile">
-            <span className="avatar">
-              {state.settings.name.slice(0, 1).toUpperCase()}
-            </span>
-            <div>
-              <strong>{state.settings.name}</strong>
-              <span>Seu espaço pessoal</span>
-            </div>
-            <button
-              className="icon-button"
-              title="Sair"
-              aria-label="Sair da conta"
-              onClick={logout}
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        </div>
-      </aside>
+      <Sidebar links={links} page={page} name={state.settings.name} nav={nav} help={help} logout={logout} />
       <div className="main-shell">
-        <header className="topbar">
-          <div className="breadcrumb">
-            <span>Meu espaço</span>
-            <ChevronRight size={13} />
-            <strong>{pageNames[page]}</strong>
-          </div>
-          <div className="topbar-right">
-            <ThemeToggle />
-            <FocusIndicator session={state.focus} onOpen={() => nav("foco")} />
-            <span className="local-status">
-              <span className="live-dot" />
-              {busy ? "Salvando…" : "Tudo no seu ritmo"}
-            </span>
-            <button
-              className="icon-button help-button"
-              aria-label="Como o Ritmo funciona"
-              onClick={help}
-            >
-              <CircleHelp size={18} />
-            </button>
-            <span className="profile-avatar-control">
-              <button
-                type="button"
-                className="avatar small-avatar profile-avatar-button"
-                aria-label={`Abrir perfil de ${state.settings.name}, nível ${level}`}
-                aria-haspopup="dialog"
-                aria-expanded={profileOpen}
-                onClick={() => setProfileOpen(true)}
-              >
-                {state.settings.name.slice(0, 1).toUpperCase()}
-              </button>
-              <span className="profile-avatar-level" aria-hidden="true">{level}</span>
-            </span>
-          </div>
-        </header>
+        <Topbar page={page} busy={busy} focus={state.focus ?? null} name={state.settings.name} level={level} profileOpen={profileOpen} nav={nav} help={help} openProfile={() => setProfileOpen(true)} />
         <main id="main-content" className="main-content" tabIndex={-1}>
           <div className={`page-heading${page === "hoje" ? " with-daily-word" : ""}`}>
             <div>
@@ -786,7 +587,7 @@ export default function App() {
           </div>
           {date !== today && page !== "jogos" && (
             <div className="history-banner">
-              <ClockIcon />
+              <CalendarDays size={16} />
               <span>
                 Você está vendo {dateLabel(date)}. Os registros salvos pertencem
                 a esse dia.
@@ -849,7 +650,7 @@ export default function App() {
         </main>
       </div>
       <nav className="mobile-nav" aria-label="Navegação no celular">
-        {navItems.slice(0, 4).map(({ id, title, icon: Icon }) => (
+        {navItems.slice(0, 4).map(({ id, mobileTitle, icon: Icon }) => (
           <button
             key={id}
             className={page === id ? "active" : ""}
@@ -857,9 +658,7 @@ export default function App() {
             onClick={() => nav(id)}
           >
             <Icon size={20} />
-            <span>
-              {id === "hoje" ? "Hoje" : id === "rotina" ? "Rotina" : title}
-            </span>
+            <span>{mobileTitle}</span>
           </button>
         ))}
         <button onClick={() => setMenu(true)} aria-label="Mais páginas">
@@ -896,41 +695,7 @@ export default function App() {
           </div>
         </Modal>
       )}
-      {profileOpen && state && (
-        <Modal
-          className="profile-modal"
-          title="Seu perfil"
-          description="Seu progresso, no seu ritmo."
-          onClose={() => setProfileOpen(false)}
-        >
-          <div className="profile-level-overview">
-            <LeafBadge level={level} size={88} />
-            <div className="profile-identity">
-              <strong>{state.settings.name}</strong>
-              <span>{totalXp.toLocaleString("pt-BR")} XP acumulados</span>
-            </div>
-          </div>
-          <section className="profile-progress-section" aria-label="Progresso de nível">
-            <div className="profile-progress-heading">
-              <strong>Próximo nível</strong>
-              <span>{xpInLevel} / 500 XP</span>
-            </div>
-            <div className="profile-xp-track" role="progressbar" aria-label="XP para o próximo nível" aria-valuemin={0} aria-valuemax={500} aria-valuenow={xpInLevel} aria-valuetext={`${xpInLevel} de 500 XP`}>
-              <span style={{ width: `${(xpInLevel / 500) * 100}%` }} />
-            </div>
-            <p>Faltam <strong>{xpToNextLevel} XP</strong> para o nível {level + 1}.</p>
-          </section>
-          <section className="profile-usage-streak" aria-label="Sequência de dias com atividade registrada">
-            <span className="profile-streak-icon"><Flame size={19} /></span>
-            <div>
-              <strong>{usageDays > 0 ? `${usageDays} ${usageDays === 1 ? "dia ativo" : "dias ativos"} seguidos` : "Comece sua sequência ativa"}</strong>
-              <span>{usageDays > 0 ? "com ao menos um registro salvo por dia" : "Faça um registro hoje para iniciar."}</span>
-            </div>
-            {usageDays > 0 && <b>{usageDays}</b>}
-          </section>
-          <p className="profile-streak-note">Cada dia conta quando há um registro salvo. O dia de hoje permanece aberto até a meia-noite.</p>
-        </Modal>
-      )}
+      {profileOpen && <ProfileModal state={state} level={level} totalXp={totalXp} usageDays={usageDays} onClose={() => setProfileOpen(false)} />}
       {dialog && (
         <Modal
           title={dialog.title}
@@ -958,7 +723,7 @@ export default function App() {
             onNext={selectedIndex < journey.length - 1 ? () => setSelectedHabitId(journey[selectedIndex + 1].id) : undefined}
             onSave={async (value) => {
               const ok = await mutate(
-                `/api/day/${date}`,
+                apiOperations.day.update(date),
                 selectedHabit.kind === "water"
                   ? { waterDelta: value - selectedDay.water }
                   : selectedHabit.kind === "sleep"
@@ -976,30 +741,10 @@ export default function App() {
         </Modal>
       )}
       {activeTutorial && !dialog && <GuidedTutorial key={activeTutorial} id={activeTutorial} onClose={closeTutorial} onComplete={completeTutorial} />}
-      {toast && (
-        <div
-          role={toast.tone === "error" ? "alert" : "status"}
-          className={`toast toast-${toast.tone}`}
-        >
-          <span>
-            {toast.tone === "error" ? <CircleAlert size={18} /> : toast.tone === "achievement" ? <Sprout size={18} /> : toast.tone === "info" ? <CircleHelp size={18} /> : <Check size={18} />}
-          </span>
-          <div className="toast-copy">
-            <strong>{toast.title}</strong>
-            {toast.message && <span>{toast.message}</span>}
-            {toast.hint && <small>{toast.hint}</small>}
-          </div>
-          <button aria-label="Fechar aviso" onClick={() => setToast(null)}>
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      {toast && <Toast notice={toast} onClose={() => setToast(null)} />}
     </div>
     {entryCover && <EntrySurface phase="reveal" />}
     {exitSurface}
     </>
   );
-}
-function ClockIcon() {
-  return <CalendarDays size={16} />;
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CATEGORY_IDS, COGNITIVE_DIFFICULTIES, COGNITIVE_GAME_IDS, HABIT_DIFFICULTIES, HABIT_KINDS } from "../shared/contract-values.mjs";
 export const dayKey = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -13,23 +14,16 @@ export const habitSchema = z.object({
   id: z.string().max(100),
   title: short,
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-  category: z.enum([
-    "corpo",
-    "mente",
-    "alimentacao",
-    "agua",
-    "sono",
-    "emocional",
-  ]),
+  category: z.enum(CATEGORY_IDS),
   description: text,
   days: z.array(z.number().int().min(0).max(6)).min(1).max(7),
-  kind: z.enum(["check", "counter", "water", "sleep"]),
+  kind: z.enum(HABIT_KINDS),
   target: z.number().positive().max(20000),
   unit: z.string().max(20),
   createdDate: dayKey,
   archived: z.boolean(),
   essential: z.boolean().optional(),
-  difficulty: z.enum(["light", "moderate", "challenging"]).optional(),
+  difficulty: z.enum(HABIT_DIFFICULTIES).optional(),
 });
 export const settingsSchema = z.object({
   name: short,
@@ -122,27 +116,26 @@ export const weekNoteSchema = z.object({
   adjustment: z.string().max(2000),
   priority: z.string().max(1000),
 });
-const cognitiveGameIds = ["memory", "sequence", "stroop", "schulte"];
 const memoryPairsByDifficulty = { easy: 8, medium: 10, hard: 12 };
 const sequenceLengthByDifficulty = { easy: 6, medium: 7, hard: 8 };
 const stroopTrialsByDifficulty = { easy: 12, medium: 18, hard: 24 };
 const schulteSizeByDifficulty = { easy: 5, medium: 6, hard: 7 };
 const cognitiveChallengeSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("memory"), difficulty: z.enum(["easy", "medium", "hard"]).default("easy"), cards: z.array(z.string().max(24)).min(16).max(24) })
+  z.object({ kind: z.literal("memory"), difficulty: z.enum(COGNITIVE_DIFFICULTIES).default("easy"), cards: z.array(z.string().max(24)).min(16).max(24) })
     .refine(({ difficulty, cards }) => {
       const pairCount = memoryPairsByDifficulty[difficulty];
       return cards.length === pairCount * 2
         && new Set(cards).size === pairCount
         && [...new Set(cards)].every((symbol) => cards.filter((card) => card === symbol).length === 2);
     }, "Desafio de memória incompatível com a dificuldade."),
-  z.object({ kind: z.literal("sequence"), difficulty: z.enum(["easy", "medium", "hard"]).default("easy"), digits: z.string().regex(/^\d{6,8}$/) })
+  z.object({ kind: z.literal("sequence"), difficulty: z.enum(COGNITIVE_DIFFICULTIES).default("easy"), digits: z.string().regex(/^\d{6,8}$/) })
     .refine(({ difficulty, digits }) => digits.length === sequenceLengthByDifficulty[difficulty], "Sequência incompatível com a dificuldade."),
   z.object({
     kind: z.literal("stroop"),
-    difficulty: z.enum(["easy", "medium", "hard"]).default("easy"),
+    difficulty: z.enum(COGNITIVE_DIFFICULTIES).default("easy"),
     trials: z.array(z.object({ word: z.enum(["vermelho", "azul", "verde", "amarelo"]), ink: z.enum(["vermelho", "azul", "verde", "amarelo"]) })).min(12).max(24),
   }).refine(({ difficulty, trials }) => trials.length === stroopTrialsByDifficulty[difficulty], "Rodadas incompatíveis com a dificuldade."),
-  z.object({ kind: z.literal("schulte"), difficulty: z.enum(["easy", "medium", "hard"]).default("easy"), tiles: z.array(z.number().int().min(1).max(49)).min(25).max(49) })
+  z.object({ kind: z.literal("schulte"), difficulty: z.enum(COGNITIVE_DIFFICULTIES).default("easy"), tiles: z.array(z.number().int().min(1).max(49)).min(25).max(49) })
     .refine(({ difficulty, tiles }) => {
       const tileCount = schulteSizeByDifficulty[difficulty] ** 2;
       return tiles.length === tileCount
@@ -152,7 +145,7 @@ const cognitiveChallengeSchema = z.discriminatedUnion("kind", [
 ]);
 const cognitiveSessionSchema = z.object({
   id: z.string().uuid(),
-  gameId: z.enum(cognitiveGameIds),
+  gameId: z.enum(COGNITIVE_GAME_IDS),
   challengeKey: z.string().regex(/^[a-f0-9]{32}$/),
   challenge: cognitiveChallengeSchema,
   startedAt: z.number().int().nonnegative(),
@@ -179,7 +172,7 @@ export const cognitiveGameResultSchema = z.object({
   total: z.number().int().min(1).max(100),
   attempts: z.number().int().min(1).max(100000).optional(),
 }).refine((result) => result.correct <= result.total, "Resultado inválido.");
-export const cognitiveGameIdSchema = z.enum(cognitiveGameIds);
+export const cognitiveGameIdSchema = z.enum(COGNITIVE_GAME_IDS);
 export const daySchema = z.object({
   habits: z.array(habitSchema).max(200),
   entries: z.record(z.string().max(100), z.number().min(0).max(20000)),
@@ -211,7 +204,7 @@ export const stateSchema = z.object({
     .refine((v) => Object.keys(v).length <= 1000)
     .default({}),
   cognitiveGames: z.record(z.string(), cognitiveGameProgressSchema).default({}).refine(
-    (games) => Object.keys(games).every((id) => cognitiveGameIds.includes(id)),
+    (games) => Object.keys(games).every((id) => COGNITIVE_GAME_IDS.includes(id)),
     "Jogo inválido.",
   ),
 });

@@ -1,4 +1,5 @@
 import { ENTRY_TIMING } from "./entry-sequence.ts";
+import { apiEndpoints } from "./api-operations.ts";
 
 // The ~2s choreography and 1.2s quiet pause fit inside this real 3s undo window.
 // Do not shorten the undo window to match the visual motion. Reduced motion
@@ -13,7 +14,7 @@ export function canCancelExit(phase: ExitPhase, now: number, deadline: number) {
 // A lost POST response is reconciled through the read-only auth endpoint.
 export async function revokeSession(request: typeof fetch = fetch) {
   try {
-    const response = await request("/api/logout", {
+    const response = await request(apiEndpoints.logout, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" }, body: "{}",
       signal: AbortSignal.timeout(10000),
@@ -22,7 +23,7 @@ export async function revokeSession(request: typeof fetch = fetch) {
     throw new Error("Logout not confirmed");
   } catch {
     try {
-      const response = await request("/api/auth", { credentials: "same-origin", signal: AbortSignal.timeout(5000) });
+      const response = await request(apiEndpoints.auth, { credentials: "same-origin", signal: AbortSignal.timeout(5000) });
       if (response.ok && (await response.json()).authenticated === false) return;
     } catch { /* Keep the private surface covered until a retry confirms logout. */ }
     throw new Error("Não foi possível confirmar sua saída. Verifique a conexão e tente novamente.");

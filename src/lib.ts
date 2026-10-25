@@ -1,6 +1,8 @@
 import type { Category, Day, Habit, State } from "./types";
 import essentialIds from "../shared/essential-habits.json" with { type: "json" };
 import initialDifficulty from "../shared/habit-difficulty.json" with { type: "json" };
+import { addDays, createDay, dateKey, scheduledHabits } from "../shared/day-rules.mjs";
+import { apiEndpoints } from "./api-operations.ts";
 export const categories: Record<
   Category,
   {
@@ -16,19 +18,8 @@ export const categories: Record<
   emocional: { label: "Bem-estar", color: "pink" },
 };
 export const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-export function todayKey(tz = "America/Sao_Paulo") {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-export function addDays(key: string, n: number) {
-  const d = new Date(`${key}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+export const todayKey = dateKey;
+export { addDays };
 export function dateLabel(
   key: string,
   options: Intl.DateTimeFormatOptions = { day: "numeric", month: "long" },
@@ -38,40 +29,10 @@ export function dateLabel(
 export const number = (n: number, digits = 0) =>
   n.toLocaleString("pt-BR", { maximumFractionDigits: digits });
 export function habitsFor(state: State, key: string) {
-  const weekday = new Date(`${key}T12:00:00`).getDay();
-  return state.habits
-    .filter(
-      (h) => !h.archived && h.createdDate <= key && h.days.includes(weekday),
-    )
-    .map((h) => ({
-      ...h,
-      target:
-        h.kind === "water"
-          ? state.settings.waterGoal
-          : h.kind === "sleep"
-            ? state.settings.sleepGoal
-            : h.target,
-    }));
+  return scheduledHabits(state, key);
 }
 export function dayFor(state: State, key: string): Day {
-  return (
-    state.days[key] ?? {
-      habits: habitsFor(state, key),
-      entries: {},
-      water: 0,
-      sleep: null,
-      weight: null,
-      energy: null,
-      mood: null,
-      journal: "",
-      win: "",
-      next: "",
-      workout: null,
-      threshold: state.settings.dailyThreshold,
-      mode: "full",
-      focusSessions: [],
-    }
-  );
+  return state.days[key] ?? createDay(state, key);
 }
 export function habitValue(h: Habit, d: Day) {
   return h.kind === "water"
@@ -229,7 +190,7 @@ export async function api<T>(
     .json()
     .catch(() => ({ error: "O servidor não respondeu. Tente novamente." }));
   if (!res.ok) {
-    if (res.status === 401 && url != "/api/login")
+    if (res.status === 401 && url != apiEndpoints.login)
       window.dispatchEvent(new Event("session-expired"));
     throw new Error(data.error || "Não foi possível concluir.");
   }
@@ -237,7 +198,7 @@ export async function api<T>(
 }
 export function downloadBackup() {
   const a = document.createElement("a");
-  a.href = "/api/export";
+  a.href = apiEndpoints.export;
   a.download = "ritmo-backup.json";
   a.click();
 }

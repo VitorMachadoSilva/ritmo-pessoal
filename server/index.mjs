@@ -1,22 +1,14 @@
 import express from "express";
 import helmet from "helmet";
-import { DatabaseSync } from "node:sqlite";
-import {
-  randomBytes,
-  randomUUID,
-  scryptSync,
-  timingSafeEqual,
-  createHash,
-} from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { dateKey, initialState } from "./defaults.mjs";
+import { dateKey } from "./defaults.mjs";
 import { validateImportedState } from "./state-rules.mjs";
 import essentialIds from "../shared/essential-habits.json" with { type: "json" };
 import backupLimits from "../shared/backup-limits.json" with { type: "json" };
-import { FocusError, pauseFocus, resumeFocus, finishFocus } from "./focus.mjs";
+import { FocusError } from "./focus.mjs";
 import {
   dayKey,
   habitSchema,
@@ -26,19 +18,22 @@ import {
   stateSchema,
   dayPatch,
   weekNoteSchema,
-  cognitiveGameIdSchema,
-  cognitiveGameResultSchema,
 } from "./schema.mjs";
-import { COGNITIVE_GAME_IDS, createCognitiveGamesState, startCognitiveGame, completeCognitiveGame, cancelCognitiveGame } from "./cognitive-games.mjs";
+import { weekStart } from "../shared/day-rules.mjs";
+import { createStore } from "./store.mjs";
+import { createLoginRateLimit, createSessionService } from "./auth.mjs";
+import { getDay, updateToday } from "./day-state.mjs";
+import { registerAuthRoutes } from "./routes/auth.mjs";
+import { registerGameRoutes } from "./routes/games.mjs";
+import { registerFocusRoutes } from "./routes/focus.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const production = process.argv.includes("--production");
 const dbPath = process.env.RITMO_DB || path.join(root, "data", "ritmo.sqlite");
-mkdirSync(path.dirname(dbPath), { recursive: true });
-const db = new DatabaseSync(dbPath);
-db.exec(
-  "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; CREATE TABLE IF NOT EXISTS owner (id INTEGER PRIMARY KEY CHECK(id=1), username TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL); CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, expires INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL);",
-);
+const store = createStore(dbPath);
+const { db, getState, save, ownerExists } = store;
+const { getSession, createSession } = createSessionService(db);
+const loginRateLimit = createLoginRateLimit();
 const app = express();
 app.disable("x-powered-by");
 app.use(
@@ -85,81 +80,6 @@ app.use("/api", (req, res, next) => {
   }
   next();
 });
-const digest = (t) => createHash("sha256").update(t).digest("hex");
-const getState = () => {
-  const state = JSON.parse(
-    db.prepare("SELECT data FROM app_state WHERE id=1").get().data,
-  );
-  state.focus ??= null;
-  state.weeks ??= {};
-  state.cognitiveGames ??= createCognitiveGamesState();
-  for (const gameId of COGNITIVE_GAME_IDS) {
-    const empty = createCognitiveGamesState()[gameId];
-    state.cognitiveGames[gameId] ??= empty;
-    state.cognitiveGames[gameId].usedChallengeKeys ??= [];
-    state.cognitiveGames[gameId].plays ??= 0;
-  }
-  for (const h of state.habits) h.essential ??= essentialIds.includes(h.id);
-  for (const d of Object.values(state.days)) {
-    d.mode ??= "full";
-    d.focusSessions ??= [];
-    for (const h of d.habits) h.essential ??= essentialIds.includes(h.id);
-  }
-  return state;
-};
-const save = (state) =>
-  db
-    .prepare("INSERT OR REPLACE INTO app_state(id,data) VALUES(1,?)")
-    .run(JSON.stringify(state));
-const ownerExists = () => !!db.prepare("SELECT id FROM owner WHERE id=1").get();
-const getSession = (req) => {
-  const token = req.headers.cookie
-    ?.split(";")
-    .map((s) => s.trim())
-    .find((s) => s.startsWith("ritmo_session="))
-    ?.slice(14);
-  return (
-    token &&
-    db
-      .prepare("SELECT hash FROM sessions WHERE hash=? AND expires>?")
-      .get(digest(token), Date.now())
-  );
-};
-const createSession = (res, remember = false) => {
-  const duration = remember ? 7 * 86400000 : 12 * 3600000;
-  const token = randomBytes(32).toString("hex");
-  db.prepare("DELETE FROM sessions WHERE expires<?").run(Date.now());
-  db.prepare("INSERT INTO sessions VALUES(?,?)").run(
-    digest(token),
-    Date.now() + duration,
-  );
-  res.cookie("ritmo_session", token, {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.RITMO_HTTPS === "1",
-    ...(remember ? { maxAge: duration } : {}),
-    path: "/",
-  });
-};
-const authSchema = z.object({
-  username: z.string().trim().min(3).max(100),
-  password: z.string().min(12, "Use pelo menos 12 caracteres.").max(128),
-  name: z.string().trim().min(1).max(120).optional(),
-  remember: z.boolean().default(false),
-});
-const failures = new Map();
-const rateLimit = (req, res, next) => {
-  const key = req.ip;
-  const current = failures.get(key);
-  if (current && current.until > Date.now() && current.count >= 10)
-    return res
-      .status(429)
-      .json({ error: "Muitas tentativas. Aguarde 15 minutos." });
-  if (!current || current.until < Date.now())
-    failures.set(key, { count: 0, until: Date.now() + 15 * 60000 });
-  failures.get(key).count++;
-  next();
-};
 const route = (fn) => (req, res, next) => {
   try {
     fn(req, res);
@@ -167,210 +87,12 @@ const route = (fn) => (req, res, next) => {
     next(error);
   }
 };
-app.get("/api/auth", (req, res) =>
-  res.json({ configured: ownerExists(), authenticated: !!getSession(req) }),
-);
-app.post(
-  "/api/setup",
-  rateLimit,
-  route((req, res) => {
-    if (ownerExists())
-      return res
-        .status(403)
-        .json({ error: "A conta pessoal já foi criada. Entre com seu login." });
-    const input = authSchema.parse(req.body);
-    const salt = randomBytes(32).toString("hex");
-    const hash = scryptSync(input.password, salt, 64).toString("hex");
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      db.prepare("INSERT INTO owner VALUES(1,?,?,?)").run(
-        input.username.toLowerCase(),
-        salt,
-        hash,
-      );
-      save(initialState(input.name || input.username));
-      db.exec("COMMIT");
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
-    createSession(res, input.remember);
-    failures.delete(req.ip);
-    res.status(201).json({ ok: true });
-  }),
-);
-app.post(
-  "/api/login",
-  rateLimit,
-  route((req, res) => {
-    const { username, password, remember } = authSchema.parse(req.body);
-    const owner = db.prepare("SELECT * FROM owner WHERE id=1").get();
-    const candidate = scryptSync(password, owner?.salt || "invalid-owner", 64);
-    const valid =
-      owner &&
-      timingSafeEqual(candidate, Buffer.from(owner.hash, "hex")) &&
-      owner.username === username.toLowerCase();
-    if (!valid)
-      return res.status(401).json({ error: "Login ou senha incorretos." });
-    createSession(res, remember);
-    failures.delete(req.ip);
-    res.json({ ok: true });
-  }),
-);
-app.use("/api", (req, res, next) =>
-  getSession(req)
-    ? next()
-    : res.status(401).json({ error: "Sua sessão terminou. Entre novamente." }),
-);
-app.post("/api/logout", (req, res) => {
-  const session = getSession(req);
-  if (session)
-    db.prepare("DELETE FROM sessions WHERE hash=?").run(session.hash);
-  res.clearCookie("ritmo_session", { path: "/" });
-  res.json({ ok: true });
-});
-app.post(
-  "/api/password",
-  rateLimit,
-  route((req, res) => {
-    const input = z
-      .object({
-        current: z.string().max(128),
-        password: z.string().min(12).max(128),
-      })
-      .parse(req.body);
-    const owner = db.prepare("SELECT * FROM owner WHERE id=1").get();
-    if (
-      !timingSafeEqual(
-        scryptSync(input.current, owner.salt, 64),
-        Buffer.from(owner.hash, "hex"),
-      )
-    )
-      return res.status(400).json({ error: "A senha atual não confere." });
-    const salt = randomBytes(32).toString("hex");
-    db.prepare("UPDATE owner SET salt=?,hash=? WHERE id=1").run(
-      salt,
-      scryptSync(input.password, salt, 64).toString("hex"),
-    );
-    db.exec("DELETE FROM sessions");
-    createSession(res);
-    failures.delete(req.ip);
-    res.json({ ok: true });
-  }),
-);
+registerAuthRoutes(app, { db, ownerExists, save, getSession, createSession, loginRateLimit });
 app.get(
   "/api/state",
   route((req, res) => res.json({ ...getState(), serverNow: Date.now() })),
 );
-app.post(
-  "/api/games/:gameId/start",
-  route((req, res) => {
-    const gameId = cognitiveGameIdSchema.parse(req.params.gameId);
-    const { difficulty } = z.object({ difficulty: z.enum(["easy", "medium", "hard"]).default("easy") }).parse(req.body);
-    const state = getState();
-    const progress = state.cognitiveGames[gameId];
-    try {
-      startCognitiveGame(gameId, progress, Date.now(), difficulty);
-    } catch (error) {
-      if (error.status) return res.status(error.status).json({ error: error.message, nextAvailableAt: error.nextAvailableAt });
-      throw error;
-    }
-    save(state);
-    res.json({ ...state, serverNow: Date.now() });
-  }),
-);
-app.post(
-  "/api/games/:gameId/complete",
-  route((req, res) => {
-    const gameId = cognitiveGameIdSchema.parse(req.params.gameId);
-    const input = cognitiveGameResultSchema.parse(req.body);
-    const state = getState();
-    try {
-      completeCognitiveGame(gameId, state.cognitiveGames[gameId], input);
-    } catch (error) {
-      if (error.status) return res.status(error.status).json({ error: error.message });
-      throw error;
-    }
-    save(state);
-    res.json({ ...state, serverNow: Date.now() });
-  }),
-);
-app.post(
-  "/api/games/:gameId/cancel",
-  route((req, res) => {
-    const gameId = cognitiveGameIdSchema.parse(req.params.gameId);
-    const { sessionId } = z.object({ sessionId: z.string().uuid() }).parse(req.body);
-    const state = getState();
-    try {
-      cancelCognitiveGame(gameId, state.cognitiveGames[gameId], sessionId);
-    } catch (error) {
-      if (error.status) return res.status(error.status).json({ error: error.message });
-      throw error;
-    }
-    save(state);
-    res.json({ ...state, serverNow: Date.now() });
-  }),
-);
-app.post(
-  "/api/games/reset-timers",
-  route((req, res) => {
-    const state = getState();
-    if (state.settings.name.trim().toLocaleLowerCase("pt-BR") !== "vitor machado silva")
-      return res.status(403).json({ error: "Este recurso está disponível apenas para a conta Vitor." });
-    for (const gameId of COGNITIVE_GAME_IDS)
-      state.cognitiveGames[gameId].nextAvailableAt = null;
-    save(state);
-    res.json({ ...state, serverNow: Date.now() });
-  }),
-);
-function scheduled(state, date) {
-  const weekday = new Date(`${date}T12:00:00`).getDay();
-  return state.habits
-    .filter(
-      (h) => !h.archived && h.createdDate <= date && h.days.includes(weekday),
-    )
-    .map((h) => ({
-      ...h,
-      target:
-        h.kind === "water"
-          ? state.settings.waterGoal
-          : h.kind === "sleep"
-            ? state.settings.sleepGoal
-            : h.target,
-    }));
-}
-function getDay(state, date) {
-  return (state.days[date] ||= {
-    habits: scheduled(state, date),
-    entries: {},
-    water: 0,
-    sleep: null,
-    weight: null,
-    energy: null,
-    mood: null,
-    journal: "",
-    win: "",
-    next: "",
-    workout: null,
-    threshold: state.settings.dailyThreshold,
-    mode: "full",
-    focusSessions: [],
-  });
-}
-function updateToday(state) {
-  const today = dateKey(state.settings.timezone);
-  if (state.days[today]) {
-    state.days[today].habits = scheduled(state, today);
-    if (
-      state.days[today].mode === "essential" &&
-      !state.days[today].habits.some((h) => h.essential)
-    )
-      throw new FocusError(
-        "Esta alteração deixaria o dia essencial vazio. Escolha outro hábito essencial ou volte à rotina completa antes de salvar.",
-      );
-    state.days[today].threshold = state.settings.dailyThreshold;
-  }
-}
+registerGameRoutes(app, { getState, save });
 app.patch(
   "/api/day/:date",
   route((req, res) => {
@@ -524,116 +246,14 @@ for (const [collection, schema] of [
     }),
   );
 }
-app.post(
-  "/api/focus/start",
-  route((req, res) => {
-    const input = z
-      .object({
-        label: z.string().trim().min(1).max(120),
-        minutes: z.number().int().min(1).max(120),
-        habitId: z.string().max(100).nullable().optional(),
-      })
-      .parse(req.body);
-    const state = getState();
-    if (state.focus)
-      throw new FocusError(
-        "Você já tem uma sessão aberta. Retome, registre ou descarte antes de começar outra.",
-        409,
-      );
-    const date = dateKey(state.settings.timezone),
-      day = getDay(state, date);
-    if ((day.focusSessions?.length ?? 0) >= 100)
-      throw new FocusError("Você atingiu o limite de sessões deste dia.");
-    if (
-      input.habitId &&
-      !day.habits.some(
-        (h) =>
-          h.id === input.habitId &&
-          h.kind === "check" &&
-          h.category === "mente",
-      )
-    )
-      throw new FocusError("Escolha um hábito de foco agendado para hoje.");
-    const now = Date.now();
-    state.focus = {
-      id: randomUUID(),
-      date,
-      label: input.label,
-      targetMinutes: input.minutes,
-      startedAt: now,
-      resumedAt: now,
-      elapsedMs: 0,
-      habitId: input.habitId ?? null,
-    };
-    save(state);
-    res.status(201).json(state);
-  }),
-);
-for (const action of ["pause", "resume", "finish", "cancel"]) {
-  app.post(
-    `/api/focus/${action}`,
-    route((req, res) => {
-      const state = getState();
-      if (!state.focus)
-        throw new FocusError(
-          "Esta sessão já foi encerrada. Atualize a página para continuar.",
-          409,
-        );
-      const { sessionId } = z
-        .object({ sessionId: z.string().min(1).max(100) })
-        .parse(req.body);
-      if (sessionId !== state.focus.id)
-        throw new FocusError(
-          "A sessão de foco mudou em outra aba. Atualize a página antes de continuar; a sessão atual foi preservada.",
-          409,
-        );
-      if (action === "pause") state.focus = pauseFocus(state.focus);
-      if (action === "resume") state.focus = resumeFocus(state.focus);
-      if (action === "finish") {
-        const session = state.focus,
-          log = finishFocus(session),
-          day = getDay(state, session.date);
-        if (day.focusSessions.length >= 100)
-          throw new FocusError("Limite de sessões deste dia atingido.");
-        if (day.focusSessions.some((s) => s.id === log.id))
-          throw new FocusError("Esta sessão já foi registrada.", 409);
-        day.focusSessions.push(log);
-        if (log.completed && session.habitId) {
-          const habit = day.habits.find(
-            (h) => h.id === session.habitId && h.kind === "check",
-          );
-          if (habit) day.entries[habit.id] = habit.target;
-        }
-        state.focus = null;
-      }
-      if (action === "cancel") state.focus = null;
-      save(state);
-      res.json(state);
-    }),
-  );
-}
-app.delete(
-  "/api/focus/:date/:id",
-  route((req, res) => {
-    const date = dayKey.parse(req.params.date),
-      state = getState(),
-      day = state.days[date];
-    if (!day?.focusSessions.some((s) => s.id === req.params.id))
-      return res.status(404).json({ error: "Registro não encontrado." });
-    day.focusSessions = day.focusSessions.filter((s) => s.id !== req.params.id);
-    save(state);
-    res.json(state);
-  }),
-);
+registerFocusRoutes(app, { getState, save });
 app.put(
   "/api/weeks/:date",
   route((req, res) => {
     const date = dayKey.parse(req.params.date),
       state = getState(),
       today = dateKey(state.settings.timezone);
-    const start = new Date(`${state.settings.startDate}T12:00:00`);
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    const firstWeek = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+    const firstWeek = weekStart(state.settings.startDate);
     if (
       new Date(`${date}T12:00:00`).getDay() !== 1 ||
       date > today ||
@@ -723,7 +343,7 @@ const server = app.listen(port, host, () => {
 for (const signal of ["SIGTERM", "SIGINT"])
   process.on(signal, () =>
     server.close(() => {
-      db.close();
+      store.close();
       process.exit(0);
     }),
   );

@@ -1,8 +1,7 @@
 import { activeHabits, addDays, dayFor, habitValue, score } from "./lib.ts";
 import type { Category, State } from "./types";
-export function weekStart(date: string) {
-  return addDays(date, -((new Date(`${date}T12:00:00`).getDay() + 6) % 7));
-}
+export { weekStart } from "../shared/day-rules.mjs";
+import { weekStart } from "../shared/day-rules.mjs";
 export function weeklyReview(state: State, date: string, today: string) {
   const start = weekStart(date);
   const days = Array.from({ length: 7 }, (_, i) => {

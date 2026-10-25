@@ -9,6 +9,7 @@ import {
   Save,
 } from "lucide-react";
 import type { PageProps } from "./pages";
+import { apiOperations } from "./api-operations";
 import {
   activeHabits,
   addDays,
@@ -188,7 +189,7 @@ export function ReviewPage(p: PageProps) {
               e.preventDefault();
               if (
                 await p.mutate(
-                  `/api/weeks/${review.start}`,
+                  apiOperations.week.update(review.start),
                   { worked, adjustment, priority },
                   "PUT",
                 )

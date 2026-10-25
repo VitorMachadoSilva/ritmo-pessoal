@@ -14,6 +14,7 @@ import { dateLabel, dayFor, number } from "./lib";
 import { clockLabel, focusElapsed, focusRemaining } from "./timer";
 import { usePageDraft } from "./drafts";
 import { TutorialTrigger } from "./GuidedTutorial";
+import { apiOperations } from "./api-operations";
 
 function useClock() {
   const [now, setNow] = useState(Date.now());
@@ -71,7 +72,7 @@ export function FocusPage(p: PageProps) {
   const finished = !!session && remaining === 0;
   async function start(e: React.FormEvent) {
     e.preventDefault();
-    const saved = await p.mutate("/api/focus/start", {
+    const saved = await p.mutate(apiOperations.focus.start, {
       label: label.trim(),
       minutes,
       habitId: habitId || null,
@@ -148,7 +149,7 @@ export function FocusPage(p: PageProps) {
                     disabled={p.busy}
                     onClick={() =>
                       p.mutate(
-                        `/api/focus/${session.resumedAt === null ? "resume" : "pause"}`,
+                        session.resumedAt === null ? apiOperations.focus.resume : apiOperations.focus.pause,
                         { sessionId: session.id },
                       )
                     }
@@ -165,7 +166,7 @@ export function FocusPage(p: PageProps) {
                   className="button focus-light"
                   disabled={p.busy || elapsed < 60000}
                   onClick={() =>
-                    p.mutate("/api/focus/finish", { sessionId: session.id })
+                    p.mutate(apiOperations.focus.finish, { sessionId: session.id })
                   }
                 >
                   <Check size={17} />
@@ -179,7 +180,7 @@ export function FocusPage(p: PageProps) {
                       "Descartar esta sessão?",
                       "O tempo desta sessão não será registrado. Seus outros registros serão preservados.",
                       () =>
-                        p.mutate("/api/focus/cancel", {
+                        p.mutate(apiOperations.focus.cancel, {
                           sessionId: session.id,
                         }),
                     )
@@ -350,7 +351,7 @@ export function FocusPage(p: PageProps) {
                     "Excluir sessão?",
                     "O tempo será removido do histórico. O hábito vinculado, se concluído, continua marcado e pode ser desmarcado na visão geral.",
                     () =>
-                      p.mutate(`/api/focus/${p.date}/${log.id}`, {}, "DELETE"),
+                      p.mutate(apiOperations.focus.remove(p.date, log.id), {}, "DELETE"),
                   )
                 }
               >
