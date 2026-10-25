@@ -45,6 +45,238 @@
 @keyframes help-agent-leave { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(4px); } }
 .fl-spark { animation: fl-spark 1.2s ease-out infinite; }
 .folhinha { display: block; overflow: visible; color: var(--forest); }
+/* ───────────────────────── Folhinha · cenas ambientes ─────────────────────────
+   Cada cena é UMA linha do tempo, com a mesma duração de SCENE_DURATION em useFolhinhaAmbient.ts
+   (plant 18s · read 15s · nap 18s · stretch 12s · butterfly 16s). Todas terminam na pose de repouso,
+   então o fim natural da cena não "pula". Unidades dos translate/rotate = unidades do SVG (160×190). */
+.fl-actor, .fl-stride, .fl-body { transform-origin: 80px 176px; }
+.fl-shadow { transform-origin: 80px 184px; }
+.fl-face { transform-origin: 80px 100px; }
+.fl-leaf-l, .fl-leaf-r { transform-origin: 80px 26px; }
+.fl-arm-l, .fl-lhold { transform-origin: 34px 106px; }
+.fl-arm-r { transform-origin: 126px 108px; }
+.fl-foot-l { transform-origin: 62px 170px; }
+.fl-foot-r { transform-origin: 98px 170px; }
+.fl-mouth-o, .fl-mouth-o-in { transform-origin: 80px 118px; }
+.fl-glasses { transform-origin: 80px 96px; }
+.fl-book { transform-origin: 80px 156px; }
+.fl-page { transform-origin: 80px 140px; }
+.fl-can { transform-origin: 30px 126px; }
+.fl-mound { transform-origin: -125px 178px; }
+.fl-sprout { transform-origin: -125px 166px; }
+.fl-mat { transform-origin: 80px 176px; }
+.fl-blanket { transform-origin: 140px 140px; }
+.fl-z { font: 800 16px "Manrope Variable", sans-serif; fill: #4f7a45; stroke: #fff; stroke-width: 1.2px; paint-order: stroke; }
+
+/* cenário: só a cena ativa aparece */
+.help-agent.is-ambient-plant .fl-w-plant, .help-agent.is-ambient-read .fl-w-read, .help-agent.is-ambient-nap .fl-w-nap,
+.help-agent.is-ambient-stretch .fl-w-stretch, .help-agent.is-ambient-butterfly .fl-w-butterfly { display: inline; animation: fl-world-in .5s ease-out both; }
+.fl-glint { animation: fl-spark 1.1s ease-out both; }
+
+/* ---- peças reutilizáveis ---- */
+@keyframes fl-world-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fl-world-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes a-step-l { 0%, 50%, 100% { transform: translate(0, 0); } 25% { transform: translate(-3px, -7px); } }
+@keyframes a-step-r { 0%, 50%, 100% { transform: translate(0, 0); } 75% { transform: translate(3px, -7px); } }
+@keyframes a-stride { 0%, 50%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(0, -4px) rotate(-2.5deg); } 75% { transform: translate(0, -4px) rotate(2.5deg); } }
+@keyframes a-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.015, 1.025); } }
+@keyframes a-float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+
+/* ---- 1 · PLANTAR (18 s): anda, tira uma semente, abaixa e planta, pega o regador, rega, o broto cresce, volta ---- */
+.help-agent.is-ambient-plant .fl-actor { animation: a-plant-actor 18s ease-in-out both; }
+.help-agent.is-ambient-plant .fl-shadow { animation: a-plant-shadow 18s ease-in-out both; }
+.help-agent.is-ambient-plant .fl-stride { animation: a-stride .6s ease-in-out .5s 5, a-stride .6s ease-in-out 15s 4; }
+.help-agent.is-ambient-plant .fl-foot-l { animation: a-step-l .6s ease-in-out .5s 5, a-step-l .6s ease-in-out 15s 4; }
+.help-agent.is-ambient-plant .fl-foot-r { animation: a-step-r .6s ease-in-out .5s 5, a-step-r .6s ease-in-out 15s 4; }
+.help-agent.is-ambient-plant :is(.fl-arm-l, .fl-lhold) { animation: a-plant-arml 18s ease-in-out both; }
+.help-agent.is-ambient-plant .fl-lh-arm { animation: a-plant-lharm 18s ease-in-out both; }
+.help-agent.is-ambient-plant .fl-seed-held { animation: a-plant-seed 18s ease-in-out both; }
+.help-agent.is-ambient-plant .fl-can { animation: a-plant-can 18s ease-in-out both; }
+.help-agent.is-ambient-plant .fl-face { animation: a-plant-face 18s ease-in-out both; }
+.help-agent.is-ambient-plant .fl-eyes-open { animation: a-plant-eo 18s linear both; }
+.help-agent.is-ambient-plant .fl-eyes-happy { animation: a-plant-eh 18s linear both; }
+.help-agent.is-ambient-plant .fl-mound { animation: a-plant-mound 18s ease-out both; }
+.help-agent.is-ambient-plant .fl-sprout { animation: a-plant-sprout 18s ease-in-out both; }
+.fl-drop { animation: a-drop .5s linear 9.7s 8; }
+@keyframes a-drop { 0% { opacity: 0; transform: translateY(0); } 15%, 80% { opacity: .9; } 100% { opacity: 0; transform: translateY(30px); } }
+@keyframes a-plant-actor {
+  0%, 2.8% { transform: translate(0, 0) rotate(0) scale(1, 1); }
+  19.4% { transform: translate(-120px, 0) rotate(0) scale(1, 1); }
+  22% { transform: translate(-120px, 0) rotate(0) scale(1.05, .93); }
+  27%, 36.5% { transform: translate(-120px, 0) rotate(-33deg) scale(1.06, .82); }
+  41%, 46% { transform: translate(-120px, 0) rotate(0) scale(1, 1); }
+  50%, 75% { transform: translate(-120px, 0) rotate(-4deg) scale(1, 1); }
+  79.5%, 83.3% { transform: translate(-120px, 0) rotate(0) scale(1, 1); }
+  96.7%, 100% { transform: translate(0, 0) rotate(0) scale(1, 1); }
+}
+@keyframes a-plant-shadow { 0%, 2.8% { transform: translateX(0); } 19.4%, 83.3% { transform: translateX(-120px); } 96.7%, 100% { transform: translateX(0); } }
+@keyframes a-plant-arml {
+  0%, 21% { transform: rotate(0); } 27%, 30% { transform: rotate(55deg); } 31.5% { transform: rotate(46deg); } 33% { transform: rotate(57deg); }
+  34.5% { transform: rotate(46deg); } 36.5% { transform: rotate(55deg); } 41%, 46% { transform: rotate(0); } 51% { transform: rotate(-12deg); }
+  55%, 63% { transform: rotate(-38deg); } 66% { transform: rotate(-42deg); } 70% { transform: rotate(-36deg); } 75% { transform: rotate(-38deg); } 79.5%, 100% { transform: rotate(0); }
+}
+@keyframes a-plant-lharm { 0%, 40% { opacity: 0; } 42%, 80% { opacity: 1; } 83%, 100% { opacity: 0; } }
+@keyframes a-plant-seed { 0% { opacity: 0; } 3.5%, 32.5% { opacity: 1; } 33.5%, 100% { opacity: 0; } }
+@keyframes a-plant-can { 0%, 41% { opacity: 0; transform: scale(.4); } 44% { opacity: 1; transform: scale(1.12); } 46%, 80% { opacity: 1; transform: scale(1); } 83%, 100% { opacity: 0; transform: scale(.6); } }
+@keyframes a-plant-face {
+  0%, 2% { transform: translate(0, 0); } 5%, 19.4% { transform: translate(-6px, -1px); } 22%, 36.5% { transform: translate(-3px, 3px); }
+  41%, 46% { transform: translate(0, -1px); } 50%, 75% { transform: translate(-4px, 3px); } 79.5% { transform: translate(0, -3px); }
+  84%, 96.7% { transform: translate(5px, 0); } 100% { transform: translate(0, 0); }
+}
+@keyframes a-plant-eo { 0%, 40.5% { opacity: 1; } 41.5%, 46.5% { opacity: 0; } 47.5%, 75.5% { opacity: 1; } 76.5%, 84% { opacity: 0; } 85%, 100% { opacity: 1; } }
+@keyframes a-plant-eh { 0%, 40.5% { opacity: 0; } 41.5%, 46.5% { opacity: 1; } 47.5%, 75.5% { opacity: 0; } 76.5%, 84% { opacity: 1; } 85%, 100% { opacity: 0; } }
+@keyframes a-plant-mound { 0%, 32.5% { opacity: 0; transform: scale(.3, .2); } 36% { opacity: 1; transform: scale(1.08, 1.12); } 38%, 100% { opacity: 1; transform: scale(1, 1); } }
+@keyframes a-plant-sprout { 0%, 36.5% { transform: scale(0); } 41% { transform: scale(.28); } 54% { transform: scale(.3); } 78% { transform: scale(1); } 82% { transform: scale(1.1, .94); } 86%, 100% { transform: scale(1, 1); } }
+
+/* ---- 2 · LER (15 s): senta na almofada, abre o livro, põe os óculos, lê, vira a página, guarda tudo ---- */
+.help-agent.is-ambient-read .fl-actor { animation: a-read-actor 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-body { animation: a-breathe 3.6s ease-in-out infinite !important; }
+.help-agent.is-ambient-read .fl-foot-l { animation: a-read-foot-l 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-foot-r { animation: a-read-foot-r 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-book { animation: a-read-book 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-page { animation: a-page 4.2s ease-in-out 5s 2; }
+.help-agent.is-ambient-read .fl-glasses { animation: a-read-glasses 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-arm-r { animation: a-read-armr 15s ease-in-out both; }
+.help-agent.is-ambient-read :is(.fl-arm-l, .fl-lhold) { animation: a-read-arml 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-lh-arm { animation: a-read-lharm 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-face { animation: a-read-face 15s ease-in-out both; }
+.help-agent.is-ambient-read .fl-eyes-open { animation: a-scan 2.6s linear 4s 3; }
+@keyframes a-read-actor { 0%, 5% { transform: translate(0, 0) scale(1, 1); } 13%, 86% { transform: translate(0, 5px) scale(1.05, .88); } 93% { transform: translate(0, 0) scale(.98, 1.06); } 100% { transform: translate(0, 0) scale(1, 1); } }
+@keyframes a-read-foot-l { 0%, 5% { transform: translate(0, 0); } 13%, 86% { transform: translate(-15px, -2px); } 93%, 100% { transform: translate(0, 0); } }
+@keyframes a-read-foot-r { 0%, 5% { transform: translate(0, 0); } 13%, 86% { transform: translate(15px, -2px); } 93%, 100% { transform: translate(0, 0); } }
+@keyframes a-read-book { 0%, 10% { opacity: 0; transform: translate(0, 16px) scale(.55); } 16% { opacity: 1; transform: translate(0, -3px) scale(1.05); } 18%, 86% { opacity: 1; transform: translate(0, 0) scale(1); } 91%, 100% { opacity: 0; transform: translate(0, 12px) scale(.7); } }
+@keyframes a-read-glasses { 0%, 17% { opacity: 0; transform: translateY(-16px); } 23% { opacity: 1; transform: translateY(2px); } 25%, 86% { opacity: 1; transform: translateY(0); } 90%, 100% { opacity: 0; transform: translateY(-10px); } }
+@keyframes a-read-armr { 0%, 14% { transform: rotate(0); } 19%, 22% { transform: rotate(-125deg); } 24% { transform: rotate(-135deg); } 26% { transform: rotate(-125deg); } 31%, 86% { transform: rotate(72deg); } 93%, 100% { transform: rotate(0); } }
+@keyframes a-read-arml { 0%, 14% { transform: rotate(0); } 20%, 86% { transform: rotate(-62deg); } 93%, 100% { transform: rotate(0); } }
+@keyframes a-read-lharm { 0%, 12% { opacity: 0; } 14%, 88% { opacity: 1; } 92%, 100% { opacity: 0; } }
+@keyframes a-read-face { 0%, 14% { transform: translate(0, 0); } 24%, 86% { transform: translate(0, 4px); } 93%, 100% { transform: translate(0, 0); } }
+@keyframes a-scan { 0% { transform: translateX(-4px); } 45%, 58% { transform: translateX(4px); } 62%, 100% { transform: translateX(-4px); } }
+@keyframes a-page { 0%, 55% { opacity: 0; transform: scaleX(1); } 56% { opacity: 1; transform: scaleX(1); } 72% { opacity: 1; transform: scaleX(0); } 88% { opacity: 1; transform: scaleX(-1); } 100% { opacity: 0; transform: scaleX(-1); } }
+
+/* ---- 3 · SONECA (18 s): boceja, estende o tapete, deita no travesseiro, é coberto, dorme com zzz, acorda ---- */
+.help-agent.is-ambient-nap .fl-actor { animation: a-nap-actor 18s ease-in-out both; }
+.help-agent.is-ambient-nap .fl-body { animation: a-breathe 3.6s ease-in-out infinite !important; }
+.help-agent.is-ambient-nap .fl-shadow { animation: a-nap-shadow 18s ease-in-out both; }
+.help-agent.is-ambient-nap .fl-mat { animation: a-nap-mat 18s ease-out both; }
+.help-agent.is-ambient-nap .fl-eyes-open { animation: a-nap-eo 18s linear both; }
+.help-agent.is-ambient-nap .fl-eyes-closed { animation: a-nap-ec 18s linear both; }
+.help-agent.is-ambient-nap .fl-mouth-smile { animation: a-nap-ms 18s linear both; }
+.help-agent.is-ambient-nap .fl-mouth-o { animation: a-nap-mo 18s ease-in-out both; }
+.help-agent.is-ambient-nap .fl-mouth-o-in { animation: a-snore 3.6s ease-in-out infinite; }
+.help-agent.is-ambient-nap .fl-leaf-l { animation: a-nap-leaf-l 18s ease-in-out both; }
+.help-agent.is-ambient-nap .fl-leaf-r { animation: a-nap-leaf-r 18s ease-in-out both; }
+.help-agent.is-ambient-nap .fl-blanket { animation: a-nap-blanket 18s ease-in-out both; }
+.help-agent.is-ambient-nap .fl-zs { animation: a-nap-zs 18s linear both; }
+.fl-z { animation: a-z 3.4s ease-out infinite; }
+@keyframes a-nap-actor {
+  0%, 2% { transform: translate(0, 0) rotate(0) scale(1, 1); }
+  6% { transform: translate(0, 0) rotate(0) scale(.97, 1.07); }
+  10% { transform: translate(0, 2px) rotate(0) scale(1.05, .93); }
+  15% { transform: translate(76px, -38px) rotate(-82deg) scale(1.03, .96); }
+  18%, 86% { transform: translate(76px, -38px) rotate(-80deg) scale(1, 1); }
+  90% { transform: translate(76px, -38px) rotate(-76deg) scale(1, 1); }
+  93% { transform: translate(50px, -24px) rotate(-42deg) scale(1, 1); }
+  96.5% { transform: translate(0, 0) rotate(5deg) scale(1.03, .96); }
+  100% { transform: translate(0, 0) rotate(0) scale(1, 1); }
+}
+@keyframes a-nap-shadow { 0%, 10% { transform: scale(1, 1); } 18%, 86% { transform: scale(1.8, 1.3); } 96%, 100% { transform: scale(1, 1); } }
+@keyframes a-nap-mat { 0% { opacity: 0; transform: scaleX(.1); } 8%, 100% { opacity: 1; transform: scaleX(1); } }
+@keyframes a-nap-eo { 0%, 4% { opacity: 1; } 4.6%, 9% { opacity: 0; } 10%, 12.5% { opacity: 1; } 13.5%, 89% { opacity: 0; } 91%, 100% { opacity: 1; } }
+@keyframes a-nap-ec { 0%, 4% { opacity: 0; } 4.6%, 9% { opacity: 1; } 10%, 12.5% { opacity: 0; } 13.5%, 89% { opacity: 1; } 91%, 100% { opacity: 0; } }
+@keyframes a-nap-ms { 0%, 4% { opacity: 1; } 4.6%, 90% { opacity: 0; } 91%, 100% { opacity: 1; } }
+@keyframes a-nap-mo { 0%, 4% { opacity: 0; transform: scale(.4); } 5.5%, 8% { opacity: 1; transform: scale(1.5); } 9% { opacity: 1; transform: scale(1.1); } 11% { opacity: 0; transform: scale(.5); } 13.5%, 88% { opacity: 1; transform: scale(.6); } 90.5%, 100% { opacity: 0; transform: scale(.4); } }
+@keyframes a-snore { 0%, 100% { transform: scale(.85); } 50% { transform: scale(1.15); } }
+@keyframes a-nap-leaf-l { 0%, 12% { transform: rotate(0); } 18%, 86% { transform: rotate(-16deg); } 94%, 100% { transform: rotate(0); } }
+@keyframes a-nap-leaf-r { 0%, 12% { transform: rotate(0); } 18%, 86% { transform: rotate(16deg); } 94%, 100% { transform: rotate(0); } }
+@keyframes a-nap-blanket { 0%, 17% { opacity: 0; transform: translate(30px, -10px); } 22%, 86% { opacity: 1; transform: translate(0, 0); } 91%, 100% { opacity: 0; transform: translate(30px, -14px); } }
+@keyframes a-nap-zs { 0%, 19% { opacity: 0; } 22%, 84% { opacity: 1; } 88%, 100% { opacity: 0; } }
+@keyframes a-z { 0% { opacity: 0; transform: translate(0, 10px) scale(.6); } 20% { opacity: .9; } 100% { opacity: 0; transform: translate(26px, -34px) scale(1.1); } }
+
+/* ---- 4 · ALONGAMENTO (12 s): agacha, sobe esticando tudo e boceja, inclina pros dois lados, solta o ar ---- */
+.help-agent.is-ambient-stretch .fl-actor { animation: a-stretch-actor 12s ease-in-out both; }
+.help-agent.is-ambient-stretch .fl-body { animation: none !important; }
+.help-agent.is-ambient-stretch .fl-arm-r { animation: a-stretch-armr 12s ease-in-out both; }
+.help-agent.is-ambient-stretch :is(.fl-arm-l, .fl-lhold) { animation: a-stretch-arml 12s ease-in-out both; }
+.help-agent.is-ambient-stretch .fl-lh-arm { animation: a-stretch-lharm 12s ease-in-out both; }
+.help-agent.is-ambient-stretch .fl-leaf-l { animation: a-stretch-leaf-l 12s ease-in-out both; }
+.help-agent.is-ambient-stretch .fl-leaf-r { animation: a-stretch-leaf-r 12s ease-in-out both; }
+.help-agent.is-ambient-stretch :is(.fl-foot-l, .fl-foot-r) { animation: a-stretch-foot 12s ease-in-out both; }
+.help-agent.is-ambient-stretch .fl-face { animation: a-stretch-face 12s ease-in-out both; }
+.help-agent.is-ambient-stretch .fl-eyes-open { animation: a-stretch-eo 12s linear both; }
+.help-agent.is-ambient-stretch .fl-eyes-happy { animation: a-stretch-eh 12s linear both; }
+.help-agent.is-ambient-stretch .fl-mouth-smile { animation: a-stretch-ms 12s linear both; }
+.help-agent.is-ambient-stretch .fl-mouth-o { animation: a-stretch-mo 12s ease-in-out both; }
+@keyframes a-stretch-actor {
+  0% { transform: translate(0, 0) rotate(0) scale(1, 1); }
+  6% { transform: translate(0, 2px) rotate(0) scale(1.07, .9); }
+  18%, 38% { transform: translate(0, -3px) rotate(0) scale(.95, 1.14); }
+  45%, 54% { transform: translate(0, -2px) rotate(-11deg) scale(.96, 1.12); }
+  62%, 71% { transform: translate(0, -2px) rotate(11deg) scale(.96, 1.12); }
+  80% { transform: translate(0, -3px) rotate(0) scale(.95, 1.14); }
+  86% { transform: translate(0, 2px) rotate(0) scale(1.08, .9); }
+  93% { transform: translate(0, 0) rotate(0) scale(.99, 1.02); }
+  100% { transform: translate(0, 0) rotate(0) scale(1, 1); }
+}
+@keyframes a-stretch-armr { 0%, 6% { transform: rotate(0) scale(1); } 18%, 80% { transform: rotate(-145deg) scale(1.4); } 86% { transform: rotate(10deg) scale(1); } 93% { transform: rotate(-4deg) scale(1); } 100% { transform: rotate(0) scale(1); } }
+@keyframes a-stretch-arml { 0%, 6% { transform: rotate(0) scale(1); } 18%, 80% { transform: rotate(145deg) scale(1.4); } 86% { transform: rotate(-10deg) scale(1); } 93% { transform: rotate(4deg) scale(1); } 100% { transform: rotate(0) scale(1); } }
+@keyframes a-stretch-lharm { 0%, 8% { opacity: 0; } 12%, 88% { opacity: 1; } 94%, 100% { opacity: 0; } }
+@keyframes a-stretch-leaf-l { 0%, 10% { transform: rotate(0); } 18%, 80% { transform: rotate(-22deg); } 86%, 100% { transform: rotate(0); } }
+@keyframes a-stretch-leaf-r { 0%, 10% { transform: rotate(0); } 18%, 80% { transform: rotate(22deg); } 86%, 100% { transform: rotate(0); } }
+@keyframes a-stretch-foot { 0%, 10% { transform: translate(0, 0); } 18%, 80% { transform: translate(0, -4px); } 90%, 100% { transform: translate(0, 0); } }
+@keyframes a-stretch-face { 0%, 12% { transform: translate(0, 0); } 20%, 78% { transform: translate(0, -3px); } 86%, 100% { transform: translate(0, 0); } }
+@keyframes a-stretch-eo { 0%, 14% { opacity: 1; } 17%, 82% { opacity: 0; } 85%, 100% { opacity: 1; } }
+@keyframes a-stretch-eh { 0%, 14% { opacity: 0; } 17%, 82% { opacity: 1; } 85%, 100% { opacity: 0; } }
+@keyframes a-stretch-ms { 0%, 15% { opacity: 1; } 16%, 40% { opacity: 0; } 41%, 84% { opacity: 1; } 85%, 92% { opacity: 0; } 93%, 100% { opacity: 1; } }
+@keyframes a-stretch-mo { 0%, 15% { opacity: 0; transform: scale(.4); } 20%, 36% { opacity: 1; transform: scale(1.7); } 40%, 84% { opacity: 0; transform: scale(.5); } 87% { opacity: 1; transform: scale(1.3); } 92%, 100% { opacity: 0; transform: scale(.5); } }
+
+/* ---- 5 · BORBOLETA (16 s): vê a borboleta chegar, ela pousa na folha, ele fica quietinho, ela voa e ele acena ---- */
+.help-agent.is-ambient-butterfly .fl-body { animation: a-float-soft 3.2s ease-in-out infinite !important; }
+.help-agent.is-ambient-butterfly .fl-face { animation: a-bf-face 16s ease-in-out both; }
+.help-agent.is-ambient-butterfly .fl-leaf-r { animation: a-bf-leaf 16s ease-in-out both; }
+.help-agent.is-ambient-butterfly .fl-arm-r { animation: a-bf-armr 16s ease-in-out both; }
+.help-agent.is-ambient-butterfly .fl-eyes-open { animation: a-bf-eo 16s linear both; }
+.help-agent.is-ambient-butterfly .fl-eyes-happy { animation: a-bf-eh 16s linear both; }
+.help-agent.is-ambient-butterfly .fl-mouth-smile { animation: a-bf-ms 16s linear both; }
+.help-agent.is-ambient-butterfly .fl-mouth-o { animation: a-bf-mo 16s ease-in-out both; }
+.fl-bf { animation: a-bf-fly 16s linear both; }
+.fl-bf-in { animation: a-flutter .7s ease-in-out 0s 13, a-flutter .7s ease-in-out 12.4s 5; }
+.fl-bf-wl, .fl-bf-wr { animation: a-flap .16s ease-in-out alternate 0s 58, a-flap .9s ease-in-out alternate 9.3s 3, a-flap .16s ease-in-out alternate 12.4s 22; }
+@keyframes a-flutter { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(2px, -5px); } }
+@keyframes a-flap { from { transform: scaleX(1); } to { transform: scaleX(.2); } }
+@keyframes a-bf-fly {
+  0% { opacity: 1; transform: translate(-135px, 52px) rotate(14deg); }
+  10% { transform: translate(-90px, 20px) rotate(-10deg); }
+  20% { transform: translate(-45px, 48px) rotate(18deg); }
+  30% { transform: translate(-8px, 14px) rotate(-14deg); }
+  40% { transform: translate(35px, 40px) rotate(12deg); }
+  50% { transform: translate(75px, 22px) rotate(-8deg); }
+  55% { transform: translate(98px, 8px) rotate(-6deg); }
+  60% { transform: translate(108px, 16px) rotate(0); }
+  63%, 77% { transform: translate(108px, 22px) rotate(0); }
+  80% { transform: translate(114px, 6px) rotate(10deg); }
+  88% { transform: translate(80px, -34px) rotate(-18deg); }
+  94% { opacity: 1; transform: translate(20px, -80px) rotate(-30deg); }
+  100% { opacity: 0; transform: translate(-60px, -130px) rotate(-40deg); }
+}
+@keyframes a-bf-face {
+  0% { transform: translate(-6px, -3px); } 10% { transform: translate(-6px, -5px); } 20% { transform: translate(-5px, -3px); } 30% { transform: translate(-2px, -5px); }
+  40% { transform: translate(-2px, -3px); } 50% { transform: translate(0, -5px); } 58% { transform: translate(2px, -5px); } 60%, 78% { transform: translate(3px, -5px); }
+  88% { transform: translate(0, -6px); } 94% { transform: translate(-4px, -6px); } 97% { transform: translate(-1px, -2px); } 100% { transform: translate(0, 0); }
+}
+@keyframes a-bf-leaf { 0%, 52% { transform: rotate(0); } 56% { transform: rotate(-6deg); } 60% { transform: rotate(15deg); } 63% { transform: rotate(11deg); } 70% { transform: rotate(13deg); } 77% { transform: rotate(11deg); } 80% { transform: rotate(-10deg); } 84% { transform: rotate(4deg); } 88%, 100% { transform: rotate(0); } }
+@keyframes a-bf-armr { 0%, 82% { transform: rotate(0); } 85% { transform: rotate(-80deg); } 87.5% { transform: rotate(-105deg); } 90% { transform: rotate(-80deg); } 92.5% { transform: rotate(-105deg); } 95% { transform: rotate(-80deg); } 98% { transform: rotate(-60deg); } 100% { transform: rotate(0); } }
+@keyframes a-bf-eo { 0%, 81% { opacity: 1; } 82%, 95% { opacity: 0; } 96%, 100% { opacity: 1; } }
+@keyframes a-bf-eh { 0%, 81% { opacity: 0; } 82%, 95% { opacity: 1; } 96%, 100% { opacity: 0; } }
+@keyframes a-bf-ms { 0%, 50% { opacity: 1; } 51%, 60% { opacity: 0; } 61%, 100% { opacity: 1; } }
+@keyframes a-bf-mo { 0%, 50% { opacity: 0; transform: scale(.5); } 53%, 59% { opacity: 1; transform: scale(.7); } 61%, 100% { opacity: 0; transform: scale(.5); } }
+
+/* ---- saída: interrompida, o Folhinha volta ao repouso e o cenário some ---- */
+.help-agent.is-ambient-exiting .fl-w { animation: fl-world-out 1.2s ease-in both; }
+.help-agent.is-ambient-exiting .folhinha :is(.fl-actor, .fl-stride, .fl-face, .fl-leaf-l, .fl-leaf-r, .fl-arm-l, .fl-arm-r, .fl-lhold, .fl-lh-arm, .fl-foot-l, .fl-foot-r, .fl-shadow, .fl-eyes-open, .fl-eyes-happy, .fl-eyes-closed, .fl-mouth-smile, .fl-mouth-o, .fl-mouth-o-in, .fl-glasses, .fl-book, .fl-page, .fl-can, .fl-seed-held) { animation: none !important; }
+.help-agent.is-ambient-exiting .folhinha .fl-body { animation: fl-float 3.2s ease-in-out infinite !important; }
+.help-agent.is-ambient-exiting .help-agent-trigger .folhinha { animation: folhinha-return 1.2s ease-out both; }
+.help-agent.is-ambient-paused .help-agent-trigger * { animation-play-state: paused !important; }
+@keyframes folhinha-return { from { transform: translateY(-4px) rotate(-5deg); } to { transform: translateY(0) rotate(0); } }
 .help-agent-panel {
   position: absolute;
   right: 0;

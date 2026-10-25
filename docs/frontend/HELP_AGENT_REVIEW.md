@@ -37,7 +37,7 @@ Após cada resposta, Folhinha pergunta “Precisa de mais alguma coisa?”. “S
 ### Digitação, sugestões e palavras-chave
 
 - O lembrete “Sua conversa está aqui 🌱” foi compactado, preservando o contraste.
-- Ao enviar uma pergunta, três pontos animados indicam digitação por cerca de 0,8 s; a resposta entra suavemente. Movimento reduzido remove os efeitos.
+- Ao enviar uma pergunta, três pontos animados indicam digitação por cerca de 3 s; a resposta entra suavemente. Movimento reduzido remove os efeitos.
 - “Sim” em “Precisa de mais alguma coisa?” exibe três sugestões contextuais da página e mantém o campo de texto disponível.
 - A busca local responde diretamente quando uma palavra-chave identifica uma única resposta confiável (por exemplo, “carga” em Treinos e “backup” em Ajustes). Termos ambíguos como “treino” ou “meta” oferecem opções; texto desconhecido mantém a resposta de limite. Resultados ambíguos priorizam a página atual.
 - Cobertura: testes da busca para termos curtos e automação do indicador de digitação e das três sugestões após “Sim”.
@@ -46,3 +46,22 @@ Após cada resposta, Folhinha pergunta “Precisa de mais alguma coisa?”. “S
 ### Despedida ao finalizar
 
 Ao escolher “Não, finalizar”, o painel fecha, o Folhinha acena e mostra “Tchau, até logo! 👋” no mesmo balão compacto do lembrete. Após três segundos, o balão desaparece e o mascote retorna suavemente ao estado padrão. Reabrir durante a despedida a cancela. O teste de navegador cobre o aceno, o texto, o retorno ao estado padrão e a ausência de lembrete recorrente.
+
+
+### Cinco cenas de repouso
+
+Após 90 segundos sem clique, toque, teclado ou gesto de rolagem, o Folhinha apresenta uma cena curta em um palco compacto no canto da tela: plantar e regar, ler, dormir, alongar-se ou acompanhar uma borboleta. Cada cena dura 12–18 segundos, seguida de uma saída suave. Sem atividade, outra pode começar depois de um intervalo aleatório de 2–4 minutos; a escolha não repete a cena imediatamente anterior. Atividade comum encerra a cena, mas a navegação interna a preserva. Clicar no mascote inicia a saída de 2,4 segundos e abre o chat automaticamente. Chat, resposta, lembrete e despedida suspendem as cenas. Aba oculta pausa relógio e animação; movimento reduzido desativa cenas automáticas. Não há som ou dados persistidos.
+
+A automação usa relógio controlado para as cinco cenas, navegação, clique, atividade, tema escuro, 390/820/1440 px e movimento reduzido. A identidade visual foi mantida no mascote SVG e nos tokens do tema.
+
+
+### Preview das cenas
+
+A rota `/folhinha-preview.html` permite iniciar cada uma das cinco cenas separadamente, repetir a cena ativa e voltar ao repouso. Exibe o palco no tamanho real e em 2×, com troca de tema. É uma página isolada, sem autenticação, chamadas de API ou dados de saúde. O build inclui a página como entrada Vite; a automação abre a rota e confirma todos os controles.
+
+
+### Revisão das cinco poses (25/10/2026)
+
+Os SVGs refeitos pelo usuário substituem as cenas com adereços externos. Braços, pés, folhas, rosto e objetos agora fazem parte do SVG em `Folhinha.tsx`, com cenário em duas camadas fornecido por `FolhinhaWorld` em `FolhinhaAmbientScene.tsx`. O `HelpAgent` e o preview aplicam as classes `is-ambient-*` diretamente no contêiner; não renderizam mais um cenário paralelo. `help-agent.css` define os movimentos de 18/15/18/12/16 segundos, alinhados com `SCENE_DURATION` no hook. O preview em `/folhinha-preview.html` usa os mesmos componentes e estilos que o app.
+
+A integração passou em `npm run check`, `npm run build` e cinco cenários Playwright de cenas/preview. O teste do preview verifica também que cada grupo SVG está visível e que a animação CSS da cena está ativa.

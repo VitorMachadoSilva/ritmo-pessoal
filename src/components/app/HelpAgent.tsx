@@ -4,6 +4,7 @@ import type { PageId } from "../../types";
 import { getPageSuggestions, searchHelp, type HelpSearchResult } from "../../help/search";
 import type { HelpEntry } from "../../help/knowledge";
 import { Folhinha } from "./Folhinha";
+import { useFolhinhaAmbient } from "./useFolhinhaAmbient";
 
 type Message = { id: number; from: "bot" | "user"; text: string; options?: HelpEntry[]; links?: HelpEntry["links"]; noFeedback?: boolean };
 const GREETING = "Oi! Eu sou o Folhinha. Posso ajudar você a usar o Ritmo. O que quer descobrir?";
@@ -30,6 +31,10 @@ export function HelpAgent({ page }: { page: PageId }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const ambient = useFolhinhaAmbient(!open && !busy && !hasAsked && farewellPhase === "none", () => {
+    setOpen(true);
+    setMood("wave");
+  });
 
   useEffect(() => {
     if (farewellPhase === "none") return;
@@ -151,7 +156,7 @@ export function HelpAgent({ page }: { page: PageId }) {
 
   const suggestions = getPageSuggestions(page);
 
-  return <div className={`help-agent${open ? " is-open" : ""}`} ref={rootRef}>
+  return <div className={`help-agent${open ? " is-open" : ""}${ambient.scene ? ` is-ambient is-ambient-${ambient.scene}${ambient.phase === "exiting" ? " is-ambient-exiting" : ""}${!ambient.visible ? " is-ambient-paused" : ""}` : ""}`} data-scene={ambient.scene ?? undefined} ref={rootRef}>
     {open && <section className="help-agent-panel" role="dialog" aria-modal="false" aria-labelledby="help-agent-title">
       <header className="help-agent-header">
         <span className="help-agent-avatar"><Folhinha size={38} mood={busy ? "thinking" : mood} /></span>
@@ -184,7 +189,7 @@ export function HelpAgent({ page }: { page: PageId }) {
     </section>}
     {canRemind && reminderVisible && <span className="help-agent-reminder" aria-hidden="true">Sua conversa está aqui 🌱</span>}
     {farewellPhase !== "none" && <span className={`help-agent-reminder${farewellPhase === "settling" ? " is-leaving" : ""}`} aria-live="polite">Tchau, até logo! 👋</span>}
-    <button ref={triggerRef} className="help-agent-trigger" type="button" onClick={() => { setFarewellPhase("none"); setOpen((current) => !current); setMood(open ? "idle" : "wave"); }} onMouseEnter={() => setButtonHovered(true)} onMouseLeave={() => setButtonHovered(false)} onFocus={() => setButtonHovered(true)} onBlur={() => setButtonHovered(false)} aria-label={open ? "Minimizar ajuda do Folhinha" : "Abrir ajuda do Folhinha"} aria-expanded={open}>
+    <button ref={triggerRef} className="help-agent-trigger" type="button" onClick={() => { if (ambient.openAfterExit()) return; setFarewellPhase("none"); setOpen((current) => !current); setMood(open ? "idle" : "wave"); }} onMouseEnter={() => setButtonHovered(true)} onMouseLeave={() => setButtonHovered(false)} onFocus={() => setButtonHovered(true)} onBlur={() => setButtonHovered(false)} aria-label={open ? "Minimizar ajuda do Folhinha" : "Abrir ajuda do Folhinha"} aria-expanded={open}>
       <Folhinha size={46} mood={open ? "listening" : farewellPhase === "waving" ? "wave" : farewellPhase === "settling" ? "settling" : canRemind && reminderVisible ? "reminder" : "idle"} hovered={buttonHovered} />
     </button>
   </div>;
