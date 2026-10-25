@@ -104,6 +104,27 @@
   fill: #d0deaa;
 }
 
+.plant-canopy-leaf {
+  opacity: 0;
+  transform: scale(.12);
+}
+
+.auth-page[data-growth="tree"] .plant-leaf,
+.auth-page[data-growth="tree-flower"] .plant-leaf {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.auth-page[data-growth="tree"] .canopy-left-upper,
+.auth-page[data-growth="tree"] .canopy-right-middle {
+  transition-delay: 70ms;
+}
+
+.auth-page[data-growth="tree"] .canopy-right-upper,
+.auth-page[data-growth="tree"] .canopy-left-middle {
+  transition-delay: 140ms;
+}
+
 .plant-bud {
   fill: #dce8b8;
   opacity: 0;
@@ -120,14 +141,21 @@
 
 .auth-page[data-growth="sprout"] .plant-stem,
 .auth-page[data-growth="leaves"] .plant-stem,
+.auth-page[data-growth="tree"] .plant-stem,
+.auth-page[data-growth="tree-flower"] .plant-stem,
 .auth-page[data-growth="bud"] .plant-stem,
 .auth-page[data-growth="flower"] .plant-stem {
   stroke-dashoffset: 0;
 }
 
-.auth-page[data-growth="leaves"] .plant-leaf,
-.auth-page[data-growth="bud"] .plant-leaf,
-.auth-page[data-growth="flower"] .plant-leaf {
+.auth-page[data-growth="leaves"] .plant-leaf-left,
+.auth-page[data-growth="leaves"] .plant-leaf-right,
+.auth-page[data-growth="tree"] .plant-leaf,
+.auth-page[data-growth="tree-flower"] .plant-leaf,
+.auth-page[data-growth="bud"] .plant-leaf-left,
+.auth-page[data-growth="bud"] .plant-leaf-right,
+.auth-page[data-growth="flower"] .plant-leaf-left,
+.auth-page[data-growth="flower"] .plant-leaf-right {
   opacity: 1;
   transform: scale(1);
 }
@@ -137,7 +165,8 @@
   transform: scale(1);
 }
 
-.auth-page[data-growth="flower"] .plant-flower {
+.auth-page[data-growth="flower"] .plant-flower,
+.auth-page[data-growth="tree-flower"] .plant-flower {
   opacity: 1;
   transform: scale(1);
 }

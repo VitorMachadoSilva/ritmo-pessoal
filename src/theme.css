@@ -85,6 +85,12 @@ textarea:focus-visible, select:focus-visible {
 .calendar-trigger { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; gap: 6px; padding: 5px 8px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text, #24352d); font: inherit; font-size: 11px; cursor: pointer; }
 .calendar-trigger:hover, .calendar-trigger[aria-expanded="true"] { border-color: var(--border, #dce4dc); background: var(--surface-raised, #f3f6f1); }
 .calendar-trigger svg { color: var(--forest, #486c4d); }
+.date-picker.is-compact { gap: 0; padding: 0; border: 0; background: transparent; }
+.date-picker.is-compact > .icon-button { display: none; }
+.date-picker.is-compact .date-label { min-width: 0; padding: 0; }
+.date-picker.is-compact .calendar-trigger { min-height: 29px; gap: 5px; padding: 4px 8px; border-color: var(--border, #dce4dc); background: var(--surface, #fff); border-radius: 999px; font-size: 10px; }
+.date-picker.is-compact .calendar-trigger:hover, .date-picker.is-compact .calendar-trigger[aria-expanded="true"] { background: var(--surface-raised, #f3f6f1); }
+.date-picker.is-compact .calendar-trigger svg { width: 13px; height: 13px; }
 .date-calendar-popover { position: fixed; z-index: 10000; width: 286px; padding: 14px; border: 1px solid var(--border, #dce4dc); border-radius: 14px; background: var(--surface, #fff); color: var(--text, #24352d); box-shadow: 0 16px 46px #13261d26; overscroll-behavior: contain; }
 .date-calendar-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .date-calendar-heading strong { color: var(--text, #24352d); font-size: 13px; font-weight: 750; text-transform: capitalize; }

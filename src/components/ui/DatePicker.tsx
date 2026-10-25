@@ -95,7 +95,7 @@ export function DatePicker({
   };
 
   return (
-    <div className="date-picker" ref={pickerRef}>
+    <div className="date-picker is-compact" ref={pickerRef}>
       <button
         className="icon-button"
         onClick={() => onChange(addDays(date, -1))}

@@ -29,6 +29,7 @@ export default function Auth<T>({ configured: initiallyConfigured, prepare, onSu
   const [capsLock, setCapsLock] = useState(false);
   const [hasLogin, setHasLogin] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
+  const [rememberForWeek, setRememberForWeek] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [motionPaused, setMotionPaused] = useState(false);
   const [pageHidden, setPageHidden] = useState(document.hidden);
@@ -36,7 +37,10 @@ export default function Auth<T>({ configured: initiallyConfigured, prepare, onSu
   const loginRef = useRef<HTMLInputElement>(null);
   const recoveryTriggerRef = useRef<HTMLButtonElement>(null);
   const submitting = useRef(false);
-  const growth = success ? "flower" : busy ? "bud" : hasPassword ? "leaves" : hasLogin ? "sprout" : "seed";
+  const growth = success
+    ? rememberForWeek ? "tree-flower" : "flower"
+    : busy ? rememberForWeek ? "tree" : "bud"
+    : rememberForWeek ? "tree" : hasPassword ? "leaves" : hasLogin ? "sprout" : "seed";
   useEffect(() => {
     if (!blocked && configured) loginRef.current?.focus({ preventScroll: true });
   }, [blocked, configured]);
@@ -51,6 +55,7 @@ export default function Auth<T>({ configured: initiallyConfigured, prepare, onSu
     const data = new FormData(event.currentTarget);
     setHasLogin(String(data.get("username") || "").trim().length > 0);
     setHasPassword(String(data.get("password") || "").length > 0);
+    setRememberForWeek(data.has("remember"));
     if (error) { setError(""); setErrorKind(""); }
   }
 
@@ -134,7 +139,7 @@ export default function Auth<T>({ configured: initiallyConfigured, prepare, onSu
               </div>
               {!configured && <label>Confirmar senha<input ref={confirmRef} name="confirm" type={show ? "text" : "password"} autoComplete="new-password" placeholder="Repita sua senha" minLength={12} maxLength={128} required aria-invalid={errorKind === "confirm"} aria-describedby={errorKind === "confirm" ? "auth-error" : undefined} /></label>}
               <div className="auth-options">
-                <label className="auth-remember"><input type="checkbox" name="remember" /><span>Manter conectado por 7 dias</span></label>
+                <label className="auth-remember"><input type="checkbox" name="remember" onChange={(event) => setRememberForWeek(event.currentTarget.checked)} /><span>Manter conectado por 7 dias</span></label>
                 {configured && <button ref={recoveryTriggerRef} type="button" className="auth-recover-link" onClick={() => setRecoveryOpen(true)}>Esqueci minha senha</button>}
               </div>
               {error && <p id="auth-error" role="alert" className="form-error auth-error"><CircleAlert size={17} aria-hidden="true" />{error}</p>}
