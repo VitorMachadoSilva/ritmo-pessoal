@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import { randomUUID } from "node:crypto";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -299,9 +300,19 @@ app.use("/api", (req, res) =>
 if (production) {
   app.use(express.static(path.join(root, "dist")));
   app.get("/{*path}", (req, res) =>
-    res.sendFile(path.join(root, "dist", "index.html")),
+    res.status(404).sendFile(path.join(root, "dist", "index.html")),
   );
 } else {
+  app.use((req, res, next) => {
+    const virtualVitePath = req.path.startsWith("/@") || req.path.startsWith("/node_modules/");
+    if (["GET", "HEAD"].includes(req.method) && req.accepts("html") && !virtualVitePath && !["/", "/index.html"].includes(req.path)) {
+      const candidate = path.resolve(root, `.${req.path}`);
+      const insideProject = candidate.startsWith(`${root}${path.sep}`);
+      if (!insideProject || !existsSync(candidate) || !statSync(candidate).isFile())
+        res.statusCode = 404;
+    }
+    next();
+  });
   const { createServer } = await import("vite");
   const vite = await createServer({
     root,

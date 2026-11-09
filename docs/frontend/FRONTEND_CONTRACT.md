@@ -11,6 +11,7 @@
 - Exportação inclui informações de saúde e avisa que a cópia é pessoal. Importação valida versão/estrutura e pede confirmação antes de substituir.
 - Conteúdo de saúde é um plano editável, não diagnóstico ou prescrição. Prioridade de avaliação hormonal aparece no plano.
 - Navegação funcional e específica. Nenhum botão decorativo sem ação.
+- Endereços de páginas válidas são explícitos. Hash ou caminho desconhecido/indisponível mostra uma página 404 com retorno a Hoje; não deve cair silenciosamente em outra página nem carregar dados privados. Previews HTML independentes permanecem acessíveis.
 - Aparência: Claro/Escuro/Sistema, preferência por navegador, aplicada antes da interface e respeitada nos portais, login e gráficos. Não incluir a preferência no backup de saúde.
 - Animações não bloqueiam ações nem simulam progresso; respeitar reduced-motion. Rascunhos de preparação de foco também exigem confirmação ao sair; sessão já iniciada não bloqueia navegação.
 - Entrada: a planta é feedback decorativo para preenchimento, não mede força da senha nem progresso da rotina. A floração só ocorre após resposta de autenticação positiva. Órbitas podem ser pausadas e param quando a aba está oculta. Erros de rede não marcam credenciais como inválidas. Recuperação orienta o comando local existente; não há cadastro adicional ou reset remoto.

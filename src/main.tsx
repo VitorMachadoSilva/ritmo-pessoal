@@ -20,6 +20,7 @@ import "./controls.css";
 import "./tutorials.css";
 import "./games.css";
 import "./help-agent.css";
+import "./not-found.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />

@@ -4,6 +4,10 @@ Projeto novo. Painel pessoal de saúde e rotina, com uma única pessoa como usu�
 
 ## Direção escolhida
 
+### Planejamento antes de integrar elementos visuais
+
+Antes de alterar ou integrar uma composição visual, defina a hierarquia dos elementos, suas proporções e alinhamentos, o percurso completo de qualquer animação e o que acontece quando elementos se cruzam. Revise o conjunto em movimento, em repouso, em tela estreita e com movimento reduzido antes de considerar a mudança pronta. Elementos decorativos devem apoiar a leitura, sem competir com o conteúdo principal.
+
 Entre um painel esportivo escuro, um planner editorial e um companheiro diário claro, escolhemos o terceiro: precisão de instrumento, calor de uma rotina pessoal. A navegação discreta toma como referência o Linear; o calendário usa a linguagem de contribuições do GitHub; Radix fornece foco, teclado e diálogos acessíveis.
 
 Paleta: nuvem #f5f6f8, papel #ffffff, floresta #214e45, broto #dceaaf, lavanda #eeebf7, água #e7f1fa. Texto #24332f, secundário #65726d. Manrope para títulos e números; DM Sans para leitura, ambas distribuídas localmente. Nada depende de fontes externas.

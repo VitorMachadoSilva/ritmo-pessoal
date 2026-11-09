@@ -50,6 +50,7 @@ import { Topbar } from "./components/app/Topbar";
 import { HelpAgent } from "./components/app/HelpAgent";
 import { useTutorialController } from "./hooks/useTutorialController";
 import { useMutationController } from "./hooks/useMutationController";
+import { NotFoundPage } from "./NotFoundPage";
 export default function App() {
   const [auth, setAuth] = useState<{
     configured: boolean;
@@ -59,6 +60,10 @@ export default function App() {
   const [error, setError] = useState("");
   const [date, setDate] = useState(todayKey());
   const [page, setPage] = useState<PageId>(validPage(location.hash.slice(1)));
+  const [routeNotFound, setRouteNotFound] = useState(() =>
+    !["/", "/index.html"].includes(window.location.pathname) ||
+    (Boolean(window.location.hash.slice(1)) && !Object.hasOwn(pageNames, window.location.hash.slice(1))),
+  );
   const [dialog, setDialog] = useState<DialogOptions | null>(null);
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const [entryReveal, setEntryReveal] = useState(false);
@@ -146,7 +151,7 @@ export default function App() {
     }
   }, [entryReveal, entryCover]);
   useEffect(() => {
-    void load();
+    if (!routeNotFound) void load();
     const expired = () => {
       setAuth({ configured: true, authenticated: false });
       setState(null);
@@ -155,15 +160,24 @@ export default function App() {
     };
     window.addEventListener("session-expired", expired);
     return () => window.removeEventListener("session-expired", expired);
-  }, [load]);
+  }, [load, routeNotFound]);
   useEffect(() => {
     route.current.index = history.state?.ritmoIndex ?? 0;
-    history.replaceState(
-      { ...history.state, ritmoIndex: route.current.index },
-      "",
-      `#${route.current.page}`,
-    );
+    if (!routeNotFound)
+      history.replaceState(
+        { ...history.state, ritmoIndex: route.current.index },
+        "",
+        `#${route.current.page}`,
+      );
     const hash = () => {
+      const hashValue = location.hash.slice(1);
+      if (!["/", "/index.html"].includes(window.location.pathname) ||
+        (Boolean(hashValue) && !Object.hasOwn(pageNames, hashValue))) {
+        setRouteNotFound(true);
+        setMenu(false);
+        return;
+      }
+      setRouteNotFound(false);
       if (exit.active()) {
         history.replaceState({ ...history.state, ritmoIndex: route.current.index }, "", `#${route.current.page}`);
         return;
@@ -269,6 +283,7 @@ export default function App() {
       return;
     }
     guarded(() => {
+      setRouteNotFound(false);
       route.current = { page: p, index: route.current.index + 1 };
       history.pushState(
         { ...history.state, ritmoIndex: route.current.index },
@@ -430,6 +445,8 @@ export default function App() {
     } else begin();
   }
   const exitSurface = exit.phase !== "idle" ? <ExitSurface phase={exit.phase} error={exit.error} onCancel={() => exit.cancel()} onRetry={() => void exit.retry()} /> : null;
+  if (routeNotFound)
+    return <NotFoundPage />;
   if (error && !state)
     return (
       <main className="loading-screen">
