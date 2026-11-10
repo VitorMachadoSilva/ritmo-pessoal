@@ -2,13 +2,14 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { dateKey, initialState } from "../server/defaults.mjs";
 import { addDays, dayFor } from "../src/lib.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
-const qaRoot = path.join(root, "output", "qa-audit");
+const qaRoot = tmpdir();
 const base = "http://127.0.0.1:24319";
 const today = dateKey();
 let child,
@@ -44,12 +45,13 @@ function fixture() {
 }
 
 before(async () => {
-  mkdirSync(qaRoot, { recursive: true });
   testDirectory = mkdtempSync(path.join(qaRoot, "regression-"));
   child = spawn(process.execPath, ["server/index.mjs", "--production"], {
     cwd: root,
     env: {
       ...process.env,
+      NODE_ENV: "test",
+      RITMO_TEST_RATE_LIMITS: "off",
       HOST: "127.0.0.1",
       PORT: "24319",
       RITMO_DB: path.join(testDirectory, "synthetic.sqlite"),

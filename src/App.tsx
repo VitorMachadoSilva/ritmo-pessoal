@@ -762,7 +762,7 @@ export default function App() {
       )}
       {activeTutorial && !dialog && <GuidedTutorial key={activeTutorial} id={activeTutorial} onClose={closeTutorial} onComplete={completeTutorial} />}
       {exit.phase === "idle" && !entryCover && <HelpAgent page={page} />}
-      {toast && <Toast notice={toast} onClose={() => setToast(null)} />}
+      {toast && <Toast notice={toast} onClose={() => setToast(null)} inDialog={Boolean(dialog || selectedHabitId)} />}
     </div>
     {entryCover && <EntrySurface phase="reveal" />}
     {exitSurface}

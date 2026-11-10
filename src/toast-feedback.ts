@@ -5,6 +5,7 @@ export type ToastNotice = {
   message?: string;
   hint?: string;
   tone: ToastTone;
+  durationMs?: number;
 };
 
 type Payload = Record<string, unknown>;
@@ -122,6 +123,23 @@ export function successToastForMutation(
 }
 
 export function errorToastForMutation(url: string, error: unknown, body?: unknown, method = "PATCH", previouslyArchived = false): ToastNotice {
+  if (error && typeof error === "object" && "status" in error && error.status === 429) {
+    const retryAfter = "retryAfterSeconds" in error && typeof error.retryAfterSeconds === "number"
+      ? error.retryAfterSeconds
+      : undefined;
+    const wait = retryAfter === undefined
+      ? "Aguarde um pouco e tente novamente."
+      : retryAfter >= 60
+        ? `Tente novamente em ${Math.ceil(retryAfter / 60)} min.`
+        : `Tente novamente em ${Math.max(1, retryAfter)} s.`;
+    return {
+      title: "Muitas solicitações em pouco tempo",
+      message: wait,
+      hint: "Esta ação não foi salva. Seus dados continuam disponíveis na tela.",
+      tone: "error",
+      durationMs: 5000,
+    };
+  }
   const { action, hint } = endpointLabel(url, body, method, previouslyArchived);
   const detail = error instanceof Error && error.message.trim()
     ? error.message.trim()

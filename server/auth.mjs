@@ -36,18 +36,3 @@ export function createSessionService(db) {
 
   return { getSession, createSession };
 }
-
-export function createLoginRateLimit() {
-  const failures = new Map();
-  const middleware = (req, res, next) => {
-    const key = req.ip;
-    const current = failures.get(key);
-    if (current && current.until > Date.now() && current.count >= 10)
-      return res.status(429).json({ error: "Muitas tentativas. Aguarde 15 minutos." });
-    if (!current || current.until < Date.now())
-      failures.set(key, { count: 0, until: Date.now() + 15 * 60000 });
-    failures.get(key).count++;
-    next();
-  };
-  return { middleware, clear: (key) => failures.delete(key) };
-}

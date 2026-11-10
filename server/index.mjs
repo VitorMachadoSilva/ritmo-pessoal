@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import { z } from "zod";
 import { dateKey } from "./defaults.mjs";
 import { validateImportedState } from "./state-rules.mjs";
@@ -22,7 +23,8 @@ import {
 } from "./schema.mjs";
 import { weekStart } from "../shared/day-rules.mjs";
 import { createStore } from "./store.mjs";
-import { createLoginRateLimit, createSessionService } from "./auth.mjs";
+import { createSessionService } from "./auth.mjs";
+import { createLoginRateLimit, createRequestRateLimits } from "./rate-limit.mjs";
 import { getDay, updateToday } from "./day-state.mjs";
 import { registerAuthRoutes } from "./routes/auth.mjs";
 import { registerGameRoutes } from "./routes/games.mjs";
@@ -35,8 +37,25 @@ const store = createStore(dbPath);
 const { db, getState, save, ownerExists } = store;
 const { getSession, createSession } = createSessionService(db);
 const loginRateLimit = createLoginRateLimit();
+const requestRateLimits = createRequestRateLimits();
 const app = express();
 app.disable("x-powered-by");
+const isolatedTestRun = process.env.NODE_ENV === "test" &&
+  process.env.RITMO_TEST_RATE_LIMITS === "off" &&
+  path.resolve(dbPath).startsWith(`${path.resolve(tmpdir())}${path.sep}`);
+const bypassRateLimit = (middleware) => isolatedTestRun
+  ? (_req, _res, next) => next()
+  : middleware;
+loginRateLimit.middleware = bypassRateLimit(loginRateLimit.middleware);
+requestRateLimits.api.middleware = bypassRateLimit(requestRateLimits.api.middleware);
+requestRateLimits.mutations.middleware = bypassRateLimit(requestRateLimits.mutations.middleware);
+requestRateLimits.import.middleware = bypassRateLimit(requestRateLimits.import.middleware);
+if (process.env.RITMO_TRUST_PROXY_HOPS !== undefined) {
+  const proxyHops = Number(process.env.RITMO_TRUST_PROXY_HOPS);
+  if (!Number.isInteger(proxyHops) || proxyHops < 1 || proxyHops > 5)
+    throw new Error("RITMO_TRUST_PROXY_HOPS deve ser um inteiro entre 1 e 5; configure apenas atrás de proxies confiáveis.");
+  app.set("trust proxy", proxyHops);
+}
 app.use(
   helmet({
     contentSecurityPolicy: production
@@ -58,14 +77,6 @@ app.use(
       process.env.RITMO_HTTPS === "1" ? undefined : false,
   }),
 );
-// Keep ordinary JSON requests small. The larger backup parser runs only after
-// the session middleware, on the import route below.
-app.use(
-  express.json({
-    limit: "5mb",
-    skip: (req) => req.path === "/api/import",
-  }),
-);
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
@@ -81,6 +92,14 @@ app.use("/api", (req, res, next) => {
   }
   next();
 });
+// Apply cheap request limits before parsing request bodies to protect CPU and memory.
+app.use("/api", requestRateLimits.api.middleware);
+app.use("/api", (req, res, next) =>
+  ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
+    ? requestRateLimits.mutations.middleware(req, res, next)
+    : next(),
+);
+app.use("/api", express.json({ limit: "5mb", skip: (req) => req.path === "/import" }));
 const route = (fn) => (req, res, next) => {
   try {
     fn(req, res);
@@ -278,6 +297,7 @@ app.get(
 );
 app.post(
   "/api/import",
+  requestRateLimits.import.middleware,
   express.json({ limit: `${backupLimits.maxImportBytes}b` }),
   route((req, res) => {
     const state = stateSchema.parse(req.body);

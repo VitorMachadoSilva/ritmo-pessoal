@@ -56,6 +56,8 @@ A aplicação precisa de um servidor Node.js, HTTPS e disco persistente para SQL
 
 Consulte [LEIA-ME.md](./LEIA-ME.md) para instruções completas, backup, recuperação de senha, funcionamento da pontuação e configuração da hospedagem.
 
+Para a preparação de proteção de borda e limites de requisição, veja [docs/security/WAF.md](./docs/security/WAF.md). A configuração do Cloudflare só poderá ser ativada depois de escolher domínio e hospedagem e fechar o acesso direto à origem.
+
 ## Atualização 1.1
 
 Os registros e backups da versão anterior continuam compatíveis. Os novos campos são preenchidos ao carregar o estado, sem apagar a conta ou o histórico. Atualize o código, execute `npm ci` e `npm run build`, e reinicie o servidor.

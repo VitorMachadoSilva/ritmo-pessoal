@@ -1705,6 +1705,24 @@ legend {
 .toast.toast-error {
   border-color: #eacac6;
 }
+.modal > .toast {
+  position: sticky;
+  bottom: 10px;
+  left: auto;
+  transform: none;
+  width: max-content;
+  max-width: 100%;
+  margin: 12px auto 0;
+  animation: modal-toast-in 180ms ease-out;
+}
+.modal > .toast.toast-exiting { animation: modal-toast-out 400ms ease-in forwards; }
+@keyframes modal-toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes modal-toast-out {
+  to { opacity: 0; transform: translateY(8px); }
+}
 .toast-achievement {
   border-color: #d8e8c4;
 }

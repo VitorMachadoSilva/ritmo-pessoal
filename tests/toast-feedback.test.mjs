@@ -41,3 +41,24 @@ test("errors identify the action and tell the person whether their previous data
   assert.equal(formError.message, "Limite de itens atingido.");
   assert.match(formError.hint, /continuam no formulário/i);
 });
+
+test("429 errors get a readable wait instruction and a five-second toast", () => {
+  const rateLimitError = Object.assign(new Error("edge response was not JSON"), {
+    status: 429,
+    retryAfterSeconds: 125,
+  });
+  assert.deepEqual(errorToastForMutation("/api/habits", rateLimitError), {
+    title: "Muitas solicitações em pouco tempo",
+    message: "Tente novamente em 3 min.",
+    hint: "Esta ação não foi salva. Seus dados continuam disponíveis na tela.",
+    tone: "error",
+    durationMs: 5000,
+  });
+  assert.match(errorToastForMutation("/api/habits", Object.assign(new Error("edge"), { status: 429 })).message, /Aguarde/);
+  assert.match(errorToastForMutation("/api/habits", Object.assign(new Error("edge"), { status: 429, retryAfterSeconds: 9 })).message, /9 s/);
+  for (const status of [400, 401, 500]) {
+    const regularError = errorToastForMutation("/api/habits", Object.assign(new Error("server"), { status }));
+    assert.equal(regularError.title, "Não foi possível salvar o hábito");
+    assert.equal(regularError.durationMs, undefined);
+  }
+});

@@ -32,6 +32,8 @@ before(async () => {
     cwd: path.resolve(import.meta.dirname, ".."),
     env: {
       ...process.env,
+      NODE_ENV: "test",
+      RITMO_TEST_RATE_LIMITS: "off",
       PORT: String(port),
       HOST: "127.0.0.1",
       RITMO_DB: path.join(dir, "test.sqlite"),

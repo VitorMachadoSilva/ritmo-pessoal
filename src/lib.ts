@@ -168,6 +168,26 @@ export function usageStreak(s: State, today: string) {
   }
   return count;
 }
+export class ApiError extends Error {
+  readonly status: number;
+  readonly retryAfterSeconds?: number;
+
+  constructor(message: string, status: number, retryAfterSeconds?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+function retryAfterSeconds(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds);
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? Math.max(0, Math.ceil((timestamp - Date.now()) / 1000)) : undefined;
+}
+
 export async function api<T>(
   url: string,
   body?: unknown,
@@ -188,11 +208,11 @@ export async function api<T>(
   }
   const data = await res
     .json()
-    .catch(() => ({ error: "O servidor não respondeu. Tente novamente." }));
+    .catch(() => ({ error: res.status === 429 ? "Muitas solicitações em pouco tempo." : "O servidor não respondeu. Tente novamente." }));
   if (!res.ok) {
     if (res.status === 401 && url != apiEndpoints.login)
       window.dispatchEvent(new Event("session-expired"));
-    throw new Error(data.error || "Não foi possível concluir.");
+    throw new ApiError(data.error || "Não foi possível concluir.", res.status, retryAfterSeconds(res.headers.get("Retry-After")));
   }
   return data;
 }

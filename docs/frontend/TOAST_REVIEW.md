@@ -10,6 +10,7 @@
 - Alternar modo do dia e energia fica silencioso quando salvo; se falhar, há alerta contextual e o estado anterior permanece.
 - Água, peso, diário, hábitos, refeições, fichas, treinos do dia, foco, revisões, ajustes, senha e backup têm confirmação própria. XP aparece como conquista separada; remoções e ajustes sem XP usam tom informativo.
 - Erros têm título orientado à ação, detalhe retornado pela API e recuperação compatível com o fluxo (por exemplo, formulário permanece aberto, estado anterior continua selecionado ou sessão não muda).
+- Resposta HTTP 429 mantém status e `Retry-After`, mesmo se o corpo de borda não for JSON. Exibe aviso próprio por 5 segundos, explica o tempo de espera quando disponível e informa que a ação não foi salva; o rascunho permanece aberto e não há retry automático.
 - Tom de sucesso usa `role=status`; erro usa `role=alert`. Erros ficam 9s, conquistas 5s e avisos/sucessos 3,6s, todos podem ser fechados.
 - O formulário de hábito diferencia edição e restauração usando o estado anterior, para não chamar uma edição normal de restauração.
 
